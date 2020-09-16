@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@5.x/css/materialdesignicons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="text/x-template" id="app-template">
+    <v-app>
+      <v-container>
+        <v-card>
+            <v-card-title>
+                Обзорная панель
+            </v-card-title>
+            <v-card-text>
+                <v-container fluid class="text-center">
+                    <v-row>
+                        <v-col cols="12" class="py-0">
+                            <p class="title font-weight-regular mb-0">Настройки</p>
+                            <v-row>
+                                <v-col cols="6">
+                                    <!-- <p class="font-weight-regular mb-0">Выбор лиги</p> -->
+                                    <v-select
+                                        v-model="chosenLeague"
+                                        :items="leagues"
+                                        label="Выбор лиги"
+                                        prepend-icon="mdi-soccer-field"
+                                        :loading="loading.leagues"
+                                    ></v-select>
+                                    <v-row>
+                                        <v-col cols="12" md="6" class="py-0">
+                                            <v-select
+                                                v-model="selectedEvent"
+                                                :items="event"
+                                                label="Событие"
+                                                prepend-icon="mdi-calendar-today"
+                                            ></v-select>
+                                        </v-col>
+                                        <v-col cols="12" md="6" class="py-0">
+                                            <v-select
+                                                v-if="selectedEvent"
+                                                v-model="selectedSubmode"
+                                                :items="event.filter(x => x.value === selectedEvent)[0].submodes"
+                                                label="Режим"
+                                                prepend-icon="mdi-playlist-check"
+                                            ></v-select>
+                                        </v-col>
+                                        <v-col cols="12" md="4" class="py-0"
+                                            v-if="selectedEvent === 'goals' && event.filter(x => x.value === 'goals')[0].submodes.map(x => x.value).indexOf(selectedSubmode) >= 0">
+                                            <v-select
+                                                v-model="operation"
+                                                :items="['<', '>', '=', '<=', '>=']"
+                                                label="Знак"
+                                                prepend-icon="mdi-not-equal-variant"
+                                            ></v-select>
+                                        </v-col>
+                                        <v-col cols="12" md="8" class="py-0"
+                                            v-if="selectedEvent === 'goals' && event.filter(x => x.value === 'goals')[0].submodes.map(x => x.value).indexOf(selectedSubmode) >= 0">
+                                            <v-text-field
+                                                v-model="goalsArg"
+                                                label="Кол-во голов"
+                                                prepend-icon="mdi-soccer"
+                                                type="number"
+                                                step="0.5"
+                                                min="-100" max="100"
+                                            ></v-text-field>
+                                        </v-col>
+                                        <v-col cols="12" md="6" class="py-0">
+                                            <v-text-field
+                                                v-model="seriesLimit"
+                                                label="Длина серии от"
+                                                prepend-icon="mdi-counter"
+                                                type="number"
+                                                min="0" max="100"
+                                            ></v-text-field>
+                                        </v-col>
+                                        <v-col cols="12" md="6" class="py-0">
+                                            <v-text-field
+                                                v-model="seriesLimitTo"
+                                                label="Длина серии до"
+                                                prepend-icon="mdi-counter"
+                                                type="number"
+                                                min="0" max="100"
+                                            ></v-text-field>
+                                        </v-col>
+                                    </v-row>
+                                </v-col>
+                                <v-col cols="6">
+                                    <v-container fluid class="py-0">
+                                        <v-row>
+                                            <v-col cols="12" md="4" class="py-0 pl-0">
+                                                <v-select
+                                                    v-model="selectedTime"
+                                                    :items="time"
+                                                    label="Тайм"
+                                                    prepend-icon="mdi-timer-outline"
+                                                ></v-select>
+                                            </v-col>
+                                            <v-col cols="12" md="4" class="py-0">
+                                                <v-select
+                                                    v-model="selectedHost"
+                                                    :items="host"
+                                                    label="Хост"
+                                                    prepend-icon="mdi-stadium"
+                                                ></v-select>
+                                            </v-col>
+                                            <v-col cols="12" md="4" class="py-0 pr-0">
+                                                <v-checkbox
+                                                    v-model="mutualCheckbox"
+                                                    label="Личные"
+                                                ></v-checkbox>
+                                            </v-col>
+                                        </v-row>
+                                    </v-container>
+                                    <v-row fluid class="d-flex py-0">
+                                        <v-col cols="12" md="6" class="py-0">
+                                            <v-text-field
+                                                v-model="sliceLastNYear"
+                                                :label="`Последние ${sliceLastNYear} лет`"
+                                                prepend-icon="mdi-calendar-range"
+                                                type="number"
+                                                min="0" max="1000"
+                                            ></v-text-field>
+                                        </v-col>
+                                        <v-col cols="12" md="6" class="py-0">
+                                            <v-text-field
+                                                v-model="sliceNMatches"
+                                                :label="`Взять последние ${sliceNMatches} матчей`"
+                                                prepend-icon="mdi-package-variant-closed"
+                                                type="number"
+                                                min="0" max="10000"
+                                            ></v-text-field>
+                                        </v-col>
+                                        <v-col cols="12" md="6" class="py-0">
+                                            <v-checkbox
+                                                v-model="searchOneLeagueCheckbox"
+                                                label="Поиск в одной лиге"
+                                            ></v-checkbox>
+                                        </v-col>
+                                        <v-col cols="12" md="6" class="py-0">
+                                            <v-checkbox
+                                                v-model="removeUnsafeMatch"
+                                                label="Безопасная серия"
+                                            ></v-checkbox>
+                                        </v-col>
+                                    </v-row>
+                                    <v-container fluid class="d-flex py-0">
+                                        <v-btn text color="success" v-show="leagueSelected != -1" @click="startSearching">Start</v-btn>
+                                        <v-spacer></v-spacer>
+                                        <v-btn text color="error" @click="stopBrowser">Stop</v-btn>
+                                    </v-container>
+                                </v-col>
+                            </v-row>
+                        </v-col>
+                    </v-row>
+                    <v-row>
+                        <v-col cols="12" md="8" class="px-0">
+                            <p class="title font-weight-regular mb-0">Выбор команды с серией</p>
+                            <v-container fluid class="px-0">
+                                <v-data-table v-model="selectedMatch" sort-by="series" sort-desc :headers="seriesHeaders" :items="seriesMatches" item-key="link" single-select show-select class="elevation-1" :loading="loading.table" loading-text="Парсинг данных... Пожалуйста, подождите">
+                                    <template v-slot:item.link="{ item }">
+                                      <v-btn icon :href="item.link" target="_blank"><v-icon>mdi-web</v-icon></v-btn icon>
+                                    </template>
+                                    <template v-slot:item.series="{ item }">
+                                        {{ item.series.join(' - ') }}
+                                    </template>
+                                    <template v-slot:item.firstTeam="{ item }">
+                                        <p :class="['ma-0', item.series[0] >= seriesLimit && item.series[0] <= seriesLimitTo ? 'font-weight-bold' : '']">{{ item.firstTeam }}</p>
+                                    </template>
+                                    <template v-slot:item.secondTeam="{ item }">
+                                        <p :class="['ma-0', item.series[1] >= seriesLimit && item.series[1] <= seriesLimitTo ? 'font-weight-bold' : '']">{{ item.secondTeam }}</p>
+                                    </template>
+                                </v-data-table>
+                            </v-container>
+                        </v-col>
+                        <v-col cols="12" md="4">
+                            <p class="title font-weight-regular mb-0">Статистика</p>
+                            <v-container fluid>
+                                <v-progress-linear
+                                    :value="(!stats.matches || stats.matches.total === 0) ? 0 : stats.matches.current * 100 / stats.matches.total"
+                                    color="indigo darken-2"
+                                ></v-progress-linear>
+                                <p>Рассмотрено {{ stats.matches.current }} из {{ stats.matches.total }} матчей в лиге ({{ Math.round((stats.matches.current / stats.matches.total + Number.EPSILON) * 10000) / 100 || 0 }}%)</p>
+                                <v-divider></v-divider>
+                                <v-container fluid class="pa-0 d-flex">
+                                    <p>Этап {{ stats.series.stage }}: {{ stats.series.current }} из {{ stats.series.total }} матчей проанализировано ({{ Math.round((stats.series.current / stats.series.total + Number.EPSILON) * 10000) / 100 || 0 }}%)</p>
+                                    <v-progress-circular
+                                        :size="50"
+                                        :value="(!stats.series || stats.series.total === 0) ? 0 : stats.series.current * 100 / stats.series.total"
+                                        color="primary"
+                                    ></v-progress-circular>
+                                </v-container>
+                            </v-container>
+                        </v-col>
+                    </v-row>
+                    <v-row>
+                        <v-col cols="12" class="px-0">
+                            <p class="title font-weight-regular mb-0">Исторические данные</p>
+                            <v-container fluid class="px-0">
+                                <v-data-table sort-by="series" sort-desc :headers="historicalHeaders" :items="historicalMatches" class="elevation-1" :loading="loading.seriesTable" loading-text="Парсинг данных... Пожалуйста, подождите">
+                                    <template v-slot:item.inx="{ item }">
+                                      <v-chip :color="['', 'green', 'orange', 'red', 'purple'][item.inx]">{{ item.inx }}</v-chip>
+                                    </template>
+                                    <template v-slot:item.link="{ item }">
+                                      <v-btn icon :href="item.link" target="_blank"><v-icon>mdi-web</v-icon></v-btn icon>
+                                    </template>
+                                    <template v-slot:item.goalsFirst="{ item }">
+                                      <v-icon v-if="item.goalsFirst === undefined">mdi-help-circle-outline</v-icon>
+                                      <p class="ma-0" v-else>{{ item.goalsFirst }}</p>
+                                    </template>
+                                    <template v-slot:item.goalsSecond="{ item }">
+                                      <v-icon v-if="item.goalsSecond === undefined">mdi-help-circle-outline</v-icon>
+                                      <p class="ma-0" v-else>{{ item.goalsSecond }}</p>
+                                    </template>
+                                    <template v-slot:item.interrupted="{ item }">
+                                      <v-chip :color="item.interrupted ? 'error' : 'success'">{{ item.interrupted ? "Да" : "Нет" }}</v-chip>
+                                    </template>
+                                </v-data-table>
+                            </v-container>
+                            <v-container v-if="historicalMatches.length > 0" fluid class="px-0">
+                                <v-data-table sort-by="totalMatches" sort-desc :headers="statisticHeaders" :items="statisticMatches" hide-default-footer class="elevation-1" :loading="loading.seriesTable" loading-text="Парсинг данных... Пожалуйста, подождите">
+                                    <template v-slot:item.inx="{ item }">
+                                      <v-chip :color="['', 'green', 'orange', 'red', 'purple'][item.inx]">{{ item.inx }}</v-chip>
+                                    </template>
+                                    <template v-slot:item.interrupted="{ item }">
+                                      <v-chip :color="item.interrupted ? 'error' : 'success'">{{ item.interrupted ? "Да" : "Нет" }}</v-chip>
+                                    </template>
+                                </v-data-table>
+                            </v-container>
+                        </v-col>
+                    </v-row>
+                </v-container>
+            </v-card-text>
+        </v-card>
+      </v-container>
+    </v-app>
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+  <script>
+    const App = {
+      template: '#app-template',
+      data: () => ({
+        chosenLeague: '',
+        leagues: [],
+        selectedMatch: [],
+
+        time: [
+            { text: 'I тайм', value: 1 },
+            { text: 'II тайм', value: 2 },
+            { text: 'Все', value: 0 },
+        ],
+        host: [
+            { text: 'Дом', value: 'home' },
+            { text: 'Гость', value: 'away' },
+            { text: 'Все', value: 'all' },
+        ],
+        event: [
+            { text: 'Победа, проигрыш, ничья', value: 'winlose', submodes: [
+               { text: 'Только выигрыш', value: 'ow' },
+               { text: 'Только проигрыш', value: 'ol' },
+               { text: 'Только ничья', value: 'od' },
+               { text: 'Выигрыш или проигрыш', value: 'wl' },
+               { text: 'Выигрыш или ничья', value: 'wd' },
+               { text: 'Проигрыш или ничья', value: 'ld' },
+            ] },
+            { text: 'Учет голов', value: 'goals', submodes: [
+               { text: 'Общий тотал', value: 'sumtotal' },
+               { text: 'Личный тотал', value: 'total' },
+               { text: 'Фора', value: 'legup' },
+               { text: 'Пропущенные', value: 'missed' },
+            ] },
+            { text: 'Логика', value: 'hitgate', submodes: [
+               { text: 'Обе забили', value: 'both' },
+               { text: 'Хотя бы одна не забила', value: 'onenot' },
+               { text: 'У одной - 0 голов', value: 'onezero' },
+            ] },
+        ],
+
+        selectedTime: 0,
+        selectedHost: 'all',
+        mutualCheckbox: false,
+        searchOneLeagueCheckbox: false,
+        removeUnsafeMatch: false,
+
+        selectedEvent: null,
+        selectedSubmode: null,
+
+        seriesLimit: 0,
+        seriesLimitTo: 0,
+        goalsArg: 0,
+        operation: '>',
+        sliceLastNYear: 5,
+        sliceNMatches: 0,
+
+        seriesHeaders: [
+            { text: 'Команда', value: 'firstTeam', align: 'center' },
+            { text: 'Команда', value: 'secondTeam', align: 'center' },
+            { text: 'Серия', value: 'series', align: 'center' },
+            { text: 'Ссылка', value: 'link', align: 'center' },
+        ],
+        historicalHeaders: [
+            { text: '№ команды', value: 'inx', align: 'center' },
+            { text: 'Дата', value: 'date', align: 'center' },
+            { text: 'Команда', value: 'firstTeam', align: 'center' },
+            { text: 'Cчет', value: 'goals', align: 'center' },
+            { text: 'Команда', value: 'secondTeam', align: 'center' },
+            { text: 'I тайм', value: 'goalsFirst', align: 'center' },
+            { text: 'II тайм', value: 'goalsSecond', align: 'center' },
+            { text: 'Серия', value: 'series', align: 'center' },
+            { text: 'Прервана', value: 'interrupted', align: 'center' },
+            { text: 'Ссылка', value: 'link', align: 'center' },
+        ],
+        statisticHeaders: [
+            { text: '№ команды', value: 'inx', align: 'center' },
+            { text: 'Команда', value: 'teamName', align: 'center' },
+            { text: 'Прервана', value: 'interrupted', align: 'center' },
+            { text: 'Количество', value: 'amount', align: 'center' },
+            { text: 'Всего серий', value: 'totalSeries', align: 'center' },
+            { text: 'Всего матчей', value: 'totalMatches', align: 'center' },
+        ],
+
+        seriesMatches: [],
+        historicalMatches: [],
+        statisticMatches: [],
+
+        matchesCounter: 1,
+
+        socket: null,
+
+        loading: {
+            leagues: true,
+            table: false,
+            seriesTable: false,
+        },
+        stats: {
+            series: { stage: 0, current: 0, total: 0 },
+            matches: { stage: 0, current: 0, total: 0 },
+        }
+      }),
+      methods: {
+        //   leagueSelected() {
+        //       console.log(this.leagues.findIndex(x => x === this.chosenLeague))
+        //   },
+          stopBrowser() {
+              this.socket.emit('stop')
+          },
+          emitEvent(eventName, ...args) {
+              this.socket.emit(eventName, ...args)
+          },
+          defaultStats() {
+              this.stats = {
+                  series: { stage: 0, current: 0, total: 0 },
+                  matches: { stage: 0, current: 0, total: 0 },
+                }
+          },
+          startSearching() {
+              this.emitEvent('start-find-series', this.leagueSelected + 1,
+                  { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: [ this.chosenLeague ] ? this.searchOneLeagueCheckbox : [] },
+                  { mode: this.selectedEvent, sub: this.selectedSubmode, limit: +this.seriesLimit, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, operation: this.operation }
+              )
+              this.selectedMatch = []
+              this.seriesMatches = []
+              this.loading.table = true
+              this.defaultStats()
+          }
+      },
+      watch: {
+          selectedEvent() {
+              console.log(this.selectedEvent, this.event, this.selectedSubmode)
+              console.log(this.event.filter(x => x.value === 'goals')[0].submodes)
+          },
+          selectedMatch() {
+              if (this.selectedMatch[0]) {
+                  console.log(this.selectedMatch[0].link, this.selectedMatch[0].series, this.chosenLeague)
+                  
+                  this.historicalMatches = []
+                  this.loading.seriesTable = true
+                  this.matchesCounter = 1
+                  this.defaultStats()
+                  
+                  this.emitEvent('start-find-historical', this.selectedMatch[0].link,
+                    {
+                        time: this.selectedTime,
+                        host: this.selectedHost,
+                        mutual: this.mutualCheckbox,
+                        leagues: [ this.chosenLeague ] ? this.searchOneLeagueCheckbox : [],
+                        sliceNMatches: this.sliceNMatches || undefined,
+                        removeUnsafeMatch: this.removeUnsafeMatch,
+                        needToParse: this.selectedMatch[0].needToParse,
+                    },
+                    { mode: this.selectedEvent, sub: this.selectedSubmode, limit: this.selectedMatch[0].series, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, yearFrom: this.sliceLastNYear || undefined, operation: this.operation }
+                    // { mode: this.selectedEvent, sub: this.selectedSubmode, limit: Math.min(...this.selectedMatch[0].series), arg: +this.goalsArg, limitTo: +this.seriesLimitTo, yearFrom: 5 }
+                    // { mode: this.selectedEvent, sub: this.selectedSubmode, limit: +this.seriesLimit, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, yearFrom: 5 }
+                  )
+    
+                //   this.loading.seriesTable = false
+              }
+            },
+            historicalMatches() {
+                if (this.historicalMatches.length > 0) {
+                    this.statisticMatches = [];
+                    [1, 2].forEach(teamN => {
+                        [false, true].forEach(interrupted => {
+                            const team = this.historicalMatches.filter(x => x.inx === teamN)
+                            if (team.length !== 0) {
+                                console.log('total matches', team[0].totalMatches)
+                                this.statisticMatches.push({
+                                    inx: teamN,
+                                    teamName: teamN - 1 ? this.selectedMatch[0].secondTeam : this.selectedMatch[0].firstTeam,
+                                    interrupted: interrupted,
+                                    amount: team.filter(x => x.interrupted === interrupted).length,
+                                    totalSeries: team.length,
+                                    totalMatches: team[0].totalMatches,
+                                })
+                            }
+                        })
+                    })
+                }
+            }
+      },
+      computed: {
+          leagueSelected() {
+              return this.leagues.findIndex(x => x === this.chosenLeague) 
+          }
+      },
+      created() {
+        this.seriesMatches = JSON.parse(localStorage.getItem('seriesMatches') || '[]')
+
+        this.socket = io('ws://localhost:3001')
+
+        this.socket.on('connect', () => {
+            console.log('Connected...')
+            
+            this.socket.on('leagues', (leagues) => {
+                // console.log('Got leagues', leagues)
+                this.leagues = leagues
+                this.loading.leagues = false
+            })
+    
+            this.socket.on('found-series', (matches) => {
+                console.log(matches)
+                this.seriesMatches = []
+                for (const [inx, element] of matches.entries()) {
+                    this.seriesMatches.push({
+                        firstTeam: element.first.name,
+                        secondTeam: element.second.name,
+                        series: element.series,
+                        link: element.matchUrl,
+                        needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo)
+                    })
+                }
+                localStorage.setItem('seriesMatches', JSON.stringify(this.seriesMatches))
+                this.loading.table = false
+            })
+
+            this.socket.on('found-historical-series', (matches) => {
+                console.log(matches)
+                this.matchesCounter = 1
+                this.historicalMatches = []
+                for (const [inx, elements] of matches.entries()) {
+                    for (const [index, element] of elements.gamesAfterLimit.entries()) {
+                        console.log('123123', this.selectedMatch[0].series, elements.series[index])
+                        if (element === null) continue
+                        if (this.selectedMatch[0].series[this.matchesCounter - 1] >= this.seriesLimit &&
+                            this.selectedMatch[0].series[this.matchesCounter - 1] <= this.seriesLimitTo)
+                        if (this.selectedMatch[0].series[this.matchesCounter - 1] <= elements.series[index]) {
+                            this.historicalMatches.push({
+                                inx: this.matchesCounter,
+                                date: element.timeOrStatus,
+                                firstTeam: element.first.name,
+                                secondTeam: element.second.name,
+                                goals: `${element.first.goals} - ${element.second.goals}`,
+                                goalsFirst: element.first.goalsFirstTime !== undefined ? `${element.first.goalsFirstTime} - ${element.second.goalsFirstTime}` : undefined,
+                                goalsSecond: element.first.goalsSecondTime !== undefined ? `${element.first.goalsSecondTime} - ${element.second.goalsSecondTime}` : undefined,
+                                series: elements.series[index],
+                                interrupted: this.selectedMatch[0].series[this.matchesCounter - 1] == elements.series[index],
+                                link: elements.matchUrl,
+                                totalMatches: elements.totalMatches,
+                            })
+                        }
+                    }
+                    this.matchesCounter++
+                }
+                this.loading.seriesTable = false
+            })
+    
+            this.socket.on('new-element', (element) => {
+                this.seriesMatches.push({
+                    firstTeam: element.first.name,
+                    secondTeam: element.second.name,
+                    series: element.series,
+                    link: element.matchUrl,
+                    needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo)
+                })
+            })
+
+            this.socket.on('new-element-historical', (elements) => {
+                console.log('We got new historical element', elements)
+                for (const [index, element] of elements.gamesAfterLimit.entries()) {
+                    console.log('123123', this.selectedMatch[0].series, elements.series[index])
+                    if (element === null) continue
+                    if (this.selectedMatch[0].series[this.matchesCounter - 1] >= this.seriesLimit &&
+                        this.selectedMatch[0].series[this.matchesCounter - 1] <= this.seriesLimitTo)
+                    if (this.selectedMatch[0].series[this.matchesCounter - 1] <= elements.series[index]) {
+                        this.historicalMatches.push({
+                            inx: this.matchesCounter,
+                            date: element.timeOrStatus,
+                            firstTeam: element.first.name,
+                            secondTeam: element.second.name,
+                            goals: `${element.first.goals} - ${element.second.goals}`,
+                            goalsFirst: element.first.goalsFirstTime !== undefined ? `${element.first.goalsFirstTime} - ${element.second.goalsFirstTime}` : undefined,
+                            goalsSecond: element.first.goalsSecondTime !== undefined ? `${element.first.goalsSecondTime} - ${element.second.goalsSecondTime}` : undefined,
+                            series: elements.series[index],
+                            interrupted: this.selectedMatch[0].series[this.matchesCounter - 1] == elements.series[index],
+                            link: elements.matchUrl,
+                            totalMatches: elements.totalMatches,
+                        })
+                    }
+                }
+                this.matchesCounter++
+            })
+    
+            this.socket.on('stats', (key, stage, inc, total, notIncrementally) => {
+                console.log('stats', stage, inc, total, arguments)
+                if (!this.stats[key]) {
+                    this.stats[key] = {
+                        stage: stage, current: inc, total: total
+                    }
+                } else {
+                    if (this.stats[key].stage - 1 !== stage) {
+                        this.stats[key].current = 0
+                    }
+                    this.stats[key].stage = stage + 1
+
+                    if (notIncrementally)
+                        this.stats[key].current = inc
+                    else
+                        this.stats[key].current += inc
+                        
+                    this.stats[key].total = total
+                }
+            })
+        })
+
+
+        window.onunload = () => { console.log('unloading'); this.socket.emit('disconnect') }
+      }
+    }      
+      
+    new Vue({
+      el: '#app',
+      vuetify: new Vuetify(),
+      render: h => h(App)
+    })
+  </script>
+</body>
+</html>
