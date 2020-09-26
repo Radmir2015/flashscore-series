@@ -147,6 +147,12 @@
                                                 label="Безопасная серия"
                                             ></v-checkbox>
                                         </v-col>
+                                        <v-col cols="12" md="6" class="py-0">
+                                            <v-checkbox
+                                                v-model="allMatchesSearch"
+                                                label="Поиск серий по всем матчам"
+                                            ></v-checkbox>
+                                        </v-col>
                                     </v-row>
                                     <v-container fluid class="d-flex py-0">
                                         <v-btn text color="success" v-show="leagueSelected != -1" @click="startSearching">Start</v-btn>
@@ -288,6 +294,7 @@
         mutualCheckbox: false,
         searchOneLeagueCheckbox: false,
         removeUnsafeMatch: false,
+        allMatchesSearch: true,
 
         selectedEvent: null,
         selectedSubmode: null,
@@ -302,12 +309,12 @@
         seriesHeaders: [
             { text: 'Команда', value: 'firstTeam', align: 'center' },
             { text: 'Команда', value: 'secondTeam', align: 'center' },
-            { text: 'Серия', value: 'series', align: 'center' },
+            { text: 'Серия', value: 'series', align: 'center', sort: (a, b) => a[0] === b[0] ? a[1] - b[1] : a[0] - b[0] },
             { text: 'Ссылка', value: 'link', align: 'center' },
         ],
         historicalHeaders: [
             { text: '№ команды', value: 'inx', align: 'center' },
-            { text: 'Дата', value: 'date', align: 'center' },
+            { text: 'Дата', value: 'date', align: 'center', sort: (a, b) => new Date(a.split('.').reverse()) - new Date(b.split('.').reverse()) },
             { text: 'Команда', value: 'firstTeam', align: 'center' },
             { text: 'Cчет', value: 'goals', align: 'center' },
             { text: 'Команда', value: 'secondTeam', align: 'center' },
@@ -362,7 +369,7 @@
           },
           startSearching() {
               this.emitEvent('start-find-series', this.leagueSelected + 1,
-                  { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: [ this.chosenLeague ] ? this.searchOneLeagueCheckbox : [] },
+                  { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: [ this.chosenLeague ] ? this.searchOneLeagueCheckbox : [], allMatchesSearch: this.allMatchesSearch },
                   { mode: this.selectedEvent, sub: this.selectedSubmode, limit: +this.seriesLimit, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, operation: this.operation }
               )
               this.selectedMatch = []

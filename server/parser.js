@@ -94,8 +94,11 @@ class FlashScore {
                     } catch {}
                 }
 
+                timeOrStatus = timeOrStatus.replace('\n', ' ').split(' ')[0]
+                if (timeOrStatus.slice(-1)[0] === '.') timeOrStatus += new Date().getFullYear()
+
                 const goals = (await (await x.findElements(By.css('.event__scores')))[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
-                const goalsFirstTime = (await (await x.findElements(By.css('.event__part')))[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
+                const goalsFirstTime = (await (await x.findElements(By.css('.event__part'))).slice(-1)[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
                 // win lose draw
                 const wld = await (await x.findElements(By.css('.wld')))[0].getText()
 
@@ -104,13 +107,13 @@ class FlashScore {
                         name: teams[0],
                         goals: goals[0],
                         goalsFirstTime: goalsFirstTime[0],
-                        goalsSecondTime: goals[2] || goals[0] - goalsFirstTime[0],
+                        goalsSecondTime: (goals[2] || goals[0]) - goalsFirstTime[0],
                     },
                     second: {
                         name: teams[1],
                         goals: goals[1],
                         goalsFirstTime: goalsFirstTime[1],
-                        goalsSecondTime: goals[3] || goals[1] - goalsFirstTime[1],
+                        goalsSecondTime: (goals[3] || goals[1]) - goalsFirstTime[1],
                     },
                     result: wld,
                     timeOrStatus,
@@ -618,7 +621,7 @@ class FlashScore {
         if (options.host == 'home')
             matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.first))
         else if (options.host == 'away')
-            matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.second))
+            matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.second, opponentTeamName))
 
         if (options.mutual) {
             matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.first) && nameCompare(x.second, opponentTeamName))
@@ -715,7 +718,8 @@ class FlashScore {
         // this.getLeagues() 
         const fitTeams = []
         // const matchesInOneLeague = await this.getMatchesOfLeague(3)
-        const matchesId = await this.getMatchIdArray(leagueIndex)
+        console.log('allMatches', filterOptions.allMatchesSearch)
+        const matchesId = await this.getMatchIdArray(leagueIndex, ...(filterOptions.allMatchesSearch ? [true, true] : []))
         console.log('matchesId', matchesId)
         console.log(matchesId.length)
         for (let i = 1; i < matchesId.length + 1; i++) {
