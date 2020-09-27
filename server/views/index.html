@@ -352,9 +352,6 @@
         }
       }),
       methods: {
-        //   leagueSelected() {
-        //       console.log(this.leagues.findIndex(x => x === this.chosenLeague))
-        //   },
           stopBrowser() {
               this.socket.emit('stop')
           },
@@ -369,7 +366,7 @@
           },
           startSearching() {
               this.emitEvent('start-find-series', this.leagueSelected + 1,
-                  { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: [ this.chosenLeague ] ? this.searchOneLeagueCheckbox : [], allMatchesSearch: this.allMatchesSearch },
+                  { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: this.searchOneLeagueCheckbox ? [ this.chosenLeague ] : [], allMatchesSearch: this.allMatchesSearch },
                   { mode: this.selectedEvent, sub: this.selectedSubmode, limit: +this.seriesLimit, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, operation: this.operation }
               )
               this.selectedMatch = []
@@ -397,17 +394,13 @@
                         time: this.selectedTime,
                         host: this.selectedHost,
                         mutual: this.mutualCheckbox,
-                        leagues: [ this.chosenLeague ] ? this.searchOneLeagueCheckbox : [],
+                        leagues: this.searchOneLeagueCheckbox ? [ this.chosenLeague ] : [],
                         sliceNMatches: this.sliceNMatches || undefined,
                         removeUnsafeMatch: this.removeUnsafeMatch,
                         needToParse: this.selectedMatch[0].needToParse,
                     },
                     { mode: this.selectedEvent, sub: this.selectedSubmode, limit: this.selectedMatch[0].series, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, yearFrom: this.sliceLastNYear || undefined, operation: this.operation }
-                    // { mode: this.selectedEvent, sub: this.selectedSubmode, limit: Math.min(...this.selectedMatch[0].series), arg: +this.goalsArg, limitTo: +this.seriesLimitTo, yearFrom: 5 }
-                    // { mode: this.selectedEvent, sub: this.selectedSubmode, limit: +this.seriesLimit, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, yearFrom: 5 }
                   )
-    
-                //   this.loading.seriesTable = false
               }
             },
             historicalMatches() {
