@@ -10,17 +10,6 @@ app.get('/', async (req, res) => {
     res.sendFile(path.join(__dirname + '/views/index.html'))
 })
 
-// app.get('/query/:id/:code', async (req, res) => {
-//     const { id, code } = req.params;
-//     res.setHeader('Content-Type', 'application/json');
-//     res.json(await sparql.makeQuery(queries[id](code)))
-// })
-
-// app.get('/query/:id', async (req, res) => {
-//     const { id } = req.params;
-//     res.setHeader('Content-Type', 'application/json');
-//     res.json(await sparql.makeQuery(queries[id]))
-// })
 let flash = null
 let leagues = null
 
@@ -61,13 +50,13 @@ io.on('connect', async socket => {
         socket.on('start-find-historical', async (matchUrl, filterOptions, analizeOptions) => {
             socket.emit('found-historical-series',
                 await flash.goToTeamPages(matchUrl, filterOptions, analizeOptions, (matches) => {
-                            console.log('Sent new historical element', matches)
-                            socket.emit('new-element-historical', matches)
-                        }, (key, stage, inc, total, notIncrementally) => {
-                            console.log(key, stage, inc, total, notIncrementally)
-                            socket.emit('stats', key, stage, inc, total, notIncrementally)
-                        }
-                    ))
+                        console.log('Sent new historical element', matches)
+                        socket.emit('new-element-historical', matches)
+                    }, (key, stage, inc, total, notIncrementally) => {
+                        console.log(key, stage, inc, total, notIncrementally)
+                        socket.emit('stats', key, stage, inc, total, notIncrementally)
+                    }
+                ))
         })
     } catch (e) {
         console.error(e)
