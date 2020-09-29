@@ -6,6 +6,7 @@ class FlashScore {
     constructor () {
         this.URL = 'https://www.flashscore.ru/'
         this.driver = null
+        this.leagues = null
     }
 
     async init() {
@@ -36,16 +37,27 @@ class FlashScore {
     }
 
     async getLeagues(className = '.event__titleBox', ch = ': ') {
-        return await Promise.all((await this.driver.findElements(By.css(className))).map(async x => {
+        this.leagues = await Promise.all((await this.driver.findElements(By.css(className))).map(async x => {
             try {
                 return (await x.getText()).split('\n').slice(0, 2).join('\n').replace('\n', ch)
             } catch {
                 return ''
             }
         }))
+
+        return this.leagues
     }
 
-    async getMatchesOfLeague(index, needToExpand = true, allMatches = false, sliceFrom = 0, sliceTo, sendStatistics) {
+    async getMatchesOfLeague(index, options, sendStatistics) {
+        const defaultOptions = {
+            needToExpand: false,
+            allMatches: false,
+            onlyMatches: false,
+            sliceFrom: 0,
+            sliceTo: undefined
+        }
+        const { needToExpand, allMatches, onlyMatches, sliceFrom, sliceTo } = Object.assign({}, defaultOptions, options)
+
         // need to expand
         if (needToExpand) {
             if (!allMatches) {
@@ -77,52 +89,54 @@ class FlashScore {
                 
         const matchesInfo = []
         const strings = []
-
-        for (const x of matches) {
-            try {
-                const teams = (await Promise.all((await x.findElements(By.css('.event__participant'))).map(async y => await y.getText())))
-
-                let timeOrStatus = ''
+        
+        if (!onlyMatches) {
+            for (const x of matches) {
                 try {
-                    timeOrStatus = (await (await x.findElements(By.css('.event__time')))[0].getText()) || ''
-                } catch {
+                    const teams = (await Promise.all((await x.findElements(By.css('.event__participant'))).map(async y => await y.getText())))
+    
+                    let timeOrStatus = ''
                     try {
-                        timeOrStatus = (await (await x.findElements(By.css('.event__stage')))[0].getText()).trim() || ''
-                    } catch {}
+                        timeOrStatus = (await (await x.findElements(By.css('.event__time')))[0].getText()) || ''
+                    } catch {
+                        try {
+                            timeOrStatus = (await (await x.findElements(By.css('.event__stage')))[0].getText()).trim() || ''
+                        } catch {}
+                    }
+    
+                    timeOrStatus = timeOrStatus.replace('\n', ' ').split(' ')[0]
+                    if (timeOrStatus.slice(-1)[0] === '.') timeOrStatus += new Date().getFullYear()
+    
+                    const goals = (await (await x.findElements(By.css('.event__scores')))[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
+                    const goalsFirstTime = (await (await x.findElements(By.css('.event__part'))).slice(-1)[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
+                    // win lose draw
+                    const wld = await (await x.findElements(By.css('.wld')))[0].getText()
+    
+                    const infoDict = {
+                        first: {
+                            name: teams[0],
+                            goals: goals[0],
+                            goalsFirstTime: goalsFirstTime[0],
+                            goalsSecondTime: (goals[2] || goals[0]) - goalsFirstTime[0],
+                        },
+                        second: {
+                            name: teams[1],
+                            goals: goals[1],
+                            goalsFirstTime: goalsFirstTime[1],
+                            goalsSecondTime: (goals[3] || goals[1]) - goalsFirstTime[1],
+                        },
+                        result: wld,
+                        timeOrStatus,
+                    }
+    
+                    matchesInfo.push(infoDict)
+    
+                    if (sendStatistics) sendStatistics('series', 1, 1, matches.length)
+                    strings.push(`${teams.join(' - ')} (${timeOrStatus})`)
+                } catch {
+                    if (sendStatistics) sendStatistics('series', 1, 1, matches.length)
+                    strings.push('')
                 }
-
-                timeOrStatus = timeOrStatus.replace('\n', ' ').split(' ')[0]
-                if (timeOrStatus.slice(-1)[0] === '.') timeOrStatus += new Date().getFullYear()
-
-                const goals = (await (await x.findElements(By.css('.event__scores')))[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
-                const goalsFirstTime = (await (await x.findElements(By.css('.event__part'))).slice(-1)[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
-                // win lose draw
-                const wld = await (await x.findElements(By.css('.wld')))[0].getText()
-
-                const infoDict = {
-                    first: {
-                        name: teams[0],
-                        goals: goals[0],
-                        goalsFirstTime: goalsFirstTime[0],
-                        goalsSecondTime: (goals[2] || goals[0]) - goalsFirstTime[0],
-                    },
-                    second: {
-                        name: teams[1],
-                        goals: goals[1],
-                        goalsFirstTime: goalsFirstTime[1],
-                        goalsSecondTime: (goals[3] || goals[1]) - goalsFirstTime[1],
-                    },
-                    result: wld,
-                    timeOrStatus,
-                }
-
-                matchesInfo.push(infoDict)
-
-                if (sendStatistics) sendStatistics('series', 1, 1, matches.length)
-                strings.push(`${teams.join(' - ')} (${timeOrStatus})`)
-            } catch {
-                if (sendStatistics) sendStatistics('series', 1, 1, matches.length)
-                strings.push('')
             }
         }
 
@@ -139,7 +153,7 @@ class FlashScore {
             return
         }
 
-        const match = (await this.getMatchesOfLeague(leagueIndex)).matches[matchIndex]
+        const match = (await this.getMatchesOfLeague(leagueIndex, { onlyMatches: true })).matches[matchIndex]
 
         const id = (await match.getAttribute('id')).split('_').pop()
 
@@ -367,7 +381,8 @@ class FlashScore {
             console.log('check leagues', leagueIndexes.map(x => leagues[x]))
 
             for (let i of leagueIndexes) {
-                const newMatches = await this.getMatchesOfLeague(i + 1, false, false, 0, filterOptions.sliceNMatches, sendStatistics)
+                // const newMatches = await this.getMatchesOfLeague(i + 1, false, false, 0, filterOptions.sliceNMatches, sendStatistics)
+                const newMatches = await this.getMatchesOfLeague(i + 1, { sliceTo: filterOptions.sliceNMatches }, sendStatistics)
                 matches = {
                     matches: [ ...matches.matches, ...newMatches.matches ],
                     matchesInfo: [ ...matches.matchesInfo, ...newMatches.matchesInfo ],
@@ -376,7 +391,8 @@ class FlashScore {
                 sendStatistics('series', 0, 1, 1)
             }
         } else {
-            matches = await this.getMatchesOfLeague(0, false, true, 0, filterOptions.sliceNMatches, sendStatistics)
+            // matches = await this.getMatchesOfLeague(0, false, true, 0, filterOptions.sliceNMatches, sendStatistics)
+            matches = await this.getMatchesOfLeague(0, { allMatches: true, sliceTo: filterOptions.sliceNMatches }, sendStatistics)
             sendStatistics('series', 0, 1, 1)
         }
         // TODO:
@@ -483,8 +499,18 @@ class FlashScore {
 
     async getMatchIdArray(...args) {
         const matchesId = await Promise.all((await this.getMatchesOfLeague(...args)).matches.map(async match => (await match.getAttribute('id')).split('_').pop()))
-
+        
         return matchesId
+    }
+    
+    async getMatchIdArraySequentally(...args) {
+        let leagues = [], matches = []
+        for (const [index, league] of this.leagues.entries()) {
+            const partialMatches = await Promise.all((await this.getMatchesOfLeague(index + 1, ...args)).matches.map(async match => (await match.getAttribute('id')).split('_').pop()))
+            leagues = [ ...leagues, ...[...Array(partialMatches.length)].map(_ => league) ]
+            matches.push(...partialMatches)
+        }
+        return { leagues, matches }
     }
 
     // find teams firing a series streak NOW
@@ -492,11 +518,18 @@ class FlashScore {
         if (await this.driver.getCurrentUrl() !== this.URL) await this.driver.get(this.URL)
 
         const fitTeams = []
-
+        let matchesId, leaguesAndMatches = { leagues: [] }
         console.log('allMatches', filterOptions.allMatchesSearch)
-        const matchesId = await this.getMatchIdArray(leagueIndex, ...(filterOptions.allMatchesSearch ? [true, true] : []))
+
+        if (filterOptions.allMatchesSearch && filterOptions.searchOneLeague) {
+            leaguesAndMatches = await this.getMatchIdArraySequentally({ needToExpand: true, onlyMatches: true })
+            matchesId = leaguesAndMatches.matches
+        } else
+            matchesId = await this.getMatchIdArray(leagueIndex, filterOptions.allMatchesSearch ? { needToExpand: true, allMatches: true, onlyMatches: true } : { onlyMatches: true })
+            
         console.log('matchesId', matchesId)
         console.log(matchesId.length)
+
         for (let i = 1; i < matchesId.length + 1; i++) {
             await this.getMatch(0, i, matchesId)
 
@@ -504,8 +537,10 @@ class FlashScore {
 
             let numberOfSeries = 0, limitFrom = 0, seriesMaxedOut = false, seriesAccumulator = [{ matchesInfo: [] }, { matchesInfo: [] }]
 
+            const leagueForMatch = leaguesAndMatches.leagues.length > 0 ? [ leaguesAndMatches.leagues[i - 1] ] : filterOptions.leagues
+
             while (numberOfSeries < 2 && !seriesMaxedOut) {
-                var checkingForSeriesStartMatches = await this.checkTimeGoals(filterOptions.leagues, limitFrom, analizeOptions.limitTo + limitFrom, filterOptions, sendStatistics)
+                var checkingForSeriesStartMatches = await this.checkTimeGoals(leagueForMatch, limitFrom, analizeOptions.limitTo + limitFrom, filterOptions, sendStatistics)
                 console.log('options', filterOptions, analizeOptions)
 
                 var filtered = [], analizedGames = []
@@ -533,17 +568,13 @@ class FlashScore {
                     first: { name: checkingForSeriesStartMatches[0].teamNames[0] },
                     second: { name: checkingForSeriesStartMatches[0].teamNames[1] },
                     series: analizedGames.map(x => x.reps.slice(-1)[0]),
-                    matchUrl: checkingForSeriesStartMatches[0].seriesMatchUrl
+                    matchUrl: checkingForSeriesStartMatches[0].seriesMatchUrl,
+                    league: leagueForMatch[0]
                 }
                 
                 fitTeams.push(lastSeriesGame)
                 
-                newElementFoundCallback({
-                    first: { name: checkingForSeriesStartMatches[0].teamNames[0] },
-                    second: { name: checkingForSeriesStartMatches[0].teamNames[1] },
-                    series: analizedGames.map(x => x.reps.slice(-1)[0]),
-                    matchUrl: checkingForSeriesStartMatches[0].seriesMatchUrl
-                })
+                newElementFoundCallback(lastSeriesGame)
             }
         }
 
