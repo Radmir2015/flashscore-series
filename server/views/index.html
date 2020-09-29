@@ -366,7 +366,7 @@
           },
           startSearching() {
               this.emitEvent('start-find-series', this.leagueSelected + 1,
-                  { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: this.searchOneLeagueCheckbox ? [ this.chosenLeague ] : [], allMatchesSearch: this.allMatchesSearch },
+                  { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: this.searchOneLeagueCheckbox ? [ this.chosenLeague ] : [], searchOneLeague: this.searchOneLeagueCheckbox, allMatchesSearch: this.allMatchesSearch },
                   { mode: this.selectedEvent, sub: this.selectedSubmode, limit: +this.seriesLimit, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, operation: this.operation }
               )
               this.selectedMatch = []
@@ -394,7 +394,7 @@
                         time: this.selectedTime,
                         host: this.selectedHost,
                         mutual: this.mutualCheckbox,
-                        leagues: this.searchOneLeagueCheckbox ? [ this.chosenLeague ] : [],
+                        leagues: this.searchOneLeagueCheckbox ? [ this.selectedMatch[0].league ] : [ ],
                         sliceNMatches: this.sliceNMatches || undefined,
                         removeUnsafeMatch: this.removeUnsafeMatch,
                         needToParse: this.selectedMatch[0].needToParse,
@@ -453,7 +453,8 @@
                         secondTeam: element.second.name,
                         series: element.series,
                         link: element.matchUrl,
-                        needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo)
+                        needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo),
+                        league: element.league
                     })
                 }
                 localStorage.setItem('seriesMatches', JSON.stringify(this.seriesMatches))
@@ -497,7 +498,8 @@
                     secondTeam: element.second.name,
                     series: element.series,
                     link: element.matchUrl,
-                    needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo)
+                    needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo),
+                    league: element.league
                 })
             })
 
