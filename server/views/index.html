@@ -678,9 +678,10 @@
             let snap
 
             try {
-                snap = await (await fetch('https://localhost/matches')).json()
-            } catch {
-                console.log('Error in fetch, getting data from db')
+                snap = await (await fetch('https://flash-score.herokuapp.com/matches')).json()
+                if (snap.length === 0) throw new Error('Zero length of matches')
+            } catch (err) {
+                console.log('Error in fetch, getting data from db', err)
                 snap = await db.collection('current').where('date', '==', today).get()
                 snap = snap.docs.map(x => x.data())
             }
