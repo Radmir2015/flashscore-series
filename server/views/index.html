@@ -678,7 +678,7 @@
             let snap
 
             try {
-                snap = await (await fetch('http://localhost:3000/matches')).json()
+                snap = await (await fetch('https://localhost/matches')).json()
             } catch {
                 console.log('Error in fetch, getting data from db')
                 snap = await db.collection('current').where('date', '==', today).get()
