@@ -155,7 +155,8 @@
                                         </v-col>
                                     </v-row>
                                     <v-container fluid class="d-flex py-0">
-                                        <v-btn text color="success" v-show="leagueSelected != -1" @click="startSearching">Start</v-btn>
+                                        <!-- <v-btn text color="success" v-show="leagueSelected != -1" @click="startSearching">Start</v-btn> -->
+                                        <v-btn text color="success" @click="startSearching">Start</v-btn>
                                         <v-spacer></v-spacer>
                                         <v-btn text color="error" @click="stopBrowser">Stop</v-btn>
                                     </v-container>
@@ -249,6 +250,30 @@
   <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+  <!-- The core Firebase JS SDK is always required and must be listed first -->
+  <script src="https://www.gstatic.com/firebasejs/7.22.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.22.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.22.0/firebase-analytics.js"></script>
+
+  <script>
+    // Your web app's Firebase configuration
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+    var firebaseConfig = {
+      apiKey: "AIzaSyCE57MH9dgA-xFLutq4O4IjC901paL89gY",
+      authDomain: "flashscore-point.firebaseapp.com",
+      databaseURL: "https://flashscore-point.firebaseio.com",
+      projectId: "flashscore-point",
+      storageBucket: "flashscore-point.appspot.com",
+      messagingSenderId: "375497089147",
+      appId: "1:375497089147:web:a8b88e7e90c91ba84942de",
+      measurementId: "G-F69V8FX8X7"
+    };
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    firebase.analytics();
+
+    window.db = firebase.firestore()
+  </script>
   <script>
     const App = {
       template: '#app-template',
@@ -306,6 +331,8 @@
         sliceLastNYear: 5,
         sliceNMatches: 0,
 
+        URL: 'https://www.flashscore.ru/',
+
         seriesHeaders: [
             { text: 'Команда', value: 'firstTeam', align: 'center' },
             { text: 'Команда', value: 'secondTeam', align: 'center' },
@@ -352,6 +379,94 @@
         }
       }),
       methods: {
+          // mode: ['winlose' (o[wld], wl, wd, ld), 'goals' (sumtotal, total, legup), 'hitgate' (both, onenot, onezero)]
+          // arg - value for goals mode
+          analizeTeam(filtered, teamName, options = { mode: 'winlose', sub: 'ow', limit: 0, arg: 0 }) {
+              console.log('analizeOptions', options)
+              const games = [...filtered.matchesInfo].reverse()
+
+              const wlHelpDict = { 'w': 'НП', 'l': 'НВ', 'd': 'ВП', 'wl': 'Н', 'wd': 'П', 'ld': 'В' }
+
+              let wlSeq, goalsReps, hitgateReps
+
+              if (options.mode == 'winlose') {
+                  wlSeq = games.map(x => x.result).join('')
+
+                  if (options.sub[0] == 'o') {
+                      const removeChars = wlHelpDict[options.sub[1]]
+                      wlSeq = wlSeq.replace(new RegExp(removeChars.split('').join('|'), 'g'), '.').split('.').map(x => x.length)
+
+                  } else {
+                      wlSeq = wlSeq.split(wlHelpDict[options.sub]).map(x => x.length)
+                  }
+              } else if (options.mode == 'goals') {
+                  const nameCompare = (matchObj) => matchObj.name.split('(')[0].trim().toLowerCase() === teamName.toLowerCase()
+                  const operationCompare = (a, b, op = '=') => ({ '=': a === b, '<': a < b, '>': a > b, '<=': a <= b, '>=': a >= b }[op])
+
+                  if (options.sub == 'sumtotal') {
+                      goalsReps = games.map(x => +x.first.filteredGoals + +x.second.filteredGoals).map(x => operationCompare(x, options.arg, options.operation) ? 1 : '-').join('').split('-').map(x => x.length)
+                  } else if (options.sub == 'total') {
+                      goalsReps = games.map(x => nameCompare(x.first) ? x.first.filteredGoals : x.second.filteredGoals).map(x => operationCompare(+x, options.arg, options.operation) ? 1 : '-').join('').split('-').map(x => x.length)
+                  } else if (options.sub == 'missed') {
+                      goalsReps = games.map(x => nameCompare(x.first) ? x.second.filteredGoals : x.first.filteredGoals).map(x => operationCompare(+x, options.arg, options.operation) ? 1 : '-').join('').split('-').map(x => x.length)
+                  } else {
+                      goalsReps = games.map(x => nameCompare(x.first) ? x.first.filteredGoals - x.second.filteredGoals : x.second.filteredGoals - x.first.filteredGoals).map(x => +x > -options.arg ? 1 : '-').join('').split('-').map(x => x.length)
+                  }
+              } else if (options.mode == 'hitgate') {
+                  if (options.sub == 'both') {
+                      hitgateReps = games.map(x => +(x.first.goals > 0 && x.second.goals > 0)).join('').replace(/0/g, '.').split('.').map(x => x.length)
+                  } else if (options.sub == 'onenot') {
+                      hitgateReps = games.map(x => +(x.first.goals == 0 || x.second.goals == 0)).join('').replace(/0/g, '.').split('.').map(x => x.length)
+                  } else { // onezero
+                      hitgateReps = games.map(x => +!!(x.first.goals > 0 ^ x.second.goals > 0)).join('').replace(/0/g, '.').split('.').map(x => x.length)
+                  }
+              }
+
+              const reps = wlSeq || goalsReps || hitgateReps
+              const saveIndexes = []
+              const fullIndexes = []
+              const series = []
+
+              const red = reps.reduce((a, b) => {
+                  if (b >= options.limit) {
+                      saveIndexes.push(a + Math.min(b, options.limit))
+                      fullIndexes.push(a + b)
+                      series.push(b)
+                  }
+                  return a + b + 1
+              }, 0)
+
+              return { saveIndexes, fullIndexes, gamesAfterLimit: saveIndexes.map(x => games[x]), reps, series }
+          },
+          filterGames(teamName, matches, opponentTeamName, options = { time: 0, host: 'all', mutual: false }) {
+              const nameCompare = (matchObj, opName) => matchObj.name.split('(')[0].trim().toLowerCase() === (opName || teamName).toLowerCase()
+              console.log('filter', teamName, opponentTeamName, matches.matchesInfo.length)
+
+              if (options.host == 'home')
+                  matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.first))
+              else if (options.host == 'away')
+                  matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.second, opponentTeamName))
+
+              if (options.mutual) {
+                  matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.first) && nameCompare(x.second, opponentTeamName))
+              }
+              console.log('filter after', teamName, opponentTeamName, matches.matchesInfo.length)
+
+              matches.matchesInfo = matches.matchesInfo.map(x => {
+                  const chooseGoals = (t) => options.time == 2 ? (t.goalsSecondTime || t.goals) - t.goalsFirstTime : options.time == 1 ? t.goalsFirstTime : t.goals
+                //   if (x.first.filteredGoals === undefined && x.second.filteredGoals === undefined) {
+                      x.first.filteredGoals = chooseGoals(x.first)
+                      x.second.filteredGoals = chooseGoals(x.second)
+                //   }
+                  return x
+              })
+
+              if (options.leagues && options.leagues.length > 0) {
+                  matches.matchesInfo = matches.matchesInfo.filter(x => options.leagues[0].split('-')[0].trim().toLowerCase() === x.league.split('-')[0].trim().toLowerCase())
+              }
+
+              return matches
+          },
           stopBrowser() {
               this.socket.emit('stop')
           },
@@ -365,13 +480,60 @@
                 }
           },
           startSearching() {
-              this.emitEvent('start-find-series', this.leagueSelected + 1,
-                  { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: this.searchOneLeagueCheckbox ? [ this.chosenLeague ] : [], searchOneLeague: this.searchOneLeagueCheckbox, allMatchesSearch: this.allMatchesSearch },
-                  { mode: this.selectedEvent, sub: this.selectedSubmode, limit: +this.seriesLimit, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, operation: this.operation }
-              )
-              this.selectedMatch = []
+            //   this.emitEvent('start-find-series', this.leagueSelected + 1,
+            //       { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: this.searchOneLeagueCheckbox ? [ this.chosenLeague ] : [], searchOneLeague: this.searchOneLeagueCheckbox, allMatchesSearch: this.allMatchesSearch },
+            //       { mode: this.selectedEvent, sub: this.selectedSubmode, limit: +this.seriesLimit, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, operation: this.operation }
+            //   )
+              const fitTeams = []
+              const filterOptions = { time: this.selectedTime, host: this.selectedHost, mutual: this.mutualCheckbox, leagues: this.searchOneLeagueCheckbox ? [ this.chosenLeague ] : [], searchOneLeague: this.searchOneLeagueCheckbox, allMatchesSearch: this.allMatchesSearch }
+              const analizeOptions = { mode: this.selectedEvent, sub: this.selectedSubmode, limit: +this.seriesLimit, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, operation: this.operation }
+              this.matches.forEach(match => {
+                  const filteredFirst = this.filterGames(match.first.name, { matchesInfo: match.first.matches }, match.second.name, { ...filterOptions, leagues: filterOptions.searchOneLeague ? (filterOptions.allMatchesSearch ? [ match.league ] : [ this.chosenLeague ]) : [] })
+                  const analizedFirst = this.analizeTeam(filteredFirst, match.first.name, analizeOptions)
+
+                  const filteredSecond = this.filterGames(match.second.name, { matchesInfo: match.second.matches }, match.first.name, { ...filterOptions, leagues: filterOptions.searchOneLeague ? (filterOptions.allMatchesSearch ? [ match.league ] : [ this.chosenLeague ]) : [] })
+                  const analizedSecond = this.analizeTeam(filteredSecond, match.second.name, analizeOptions)
+
+                  if ([analizedFirst, analizedSecond].some(x => x.reps.slice(-1)[0] >= analizeOptions.limit && x.reps.slice(-1)[0] <= analizeOptions.limitTo)) {
+                      console.log('Found a match with series')
+
+                    //   console.log('found something', match.first.name.trim() || match.first.matches[0].name, match.second.name.trim() || match.second.matches[0].name)
+                      const frequentName = partial => {
+                          const dict = {}
+                          partial.forEach(item => {
+                              dict[item.first.name] = (dict[item.first.name] || 0) + 1
+                              dict[item.second.name] = (dict[item.second.name] || 0) + 1
+                          })
+                          return Object.keys(dict)[Object.values(dict).findIndex(x => x === Math.max(...Object.values(dict)))]
+                      }
+
+                      const lastSeriesGame = {
+                          first: { name: match.first.name.trim() || frequentName(match.first.matches) },
+                          second: { name: match.second.name.trim() || frequentName(match.second.matches) },
+                          series: [analizedFirst, analizedSecond].map(x => x.reps.slice(-1)[0]),
+                          matchUrl: match.link,
+                          league: match.league
+                      }
+
+                      fitTeams.push(lastSeriesGame)
+
+                    //   newElementFoundCallback(lastSeriesGame)
+                  }
+              })
+            //   this.selectedMatch = []
+            //   this.seriesMatches = []
+            //   this.loading.table = true
               this.seriesMatches = []
-              this.loading.table = true
+              for (const [inx, element] of fitTeams.entries()) {
+                  this.seriesMatches.push({
+                      firstTeam: element.first.name,
+                      secondTeam: element.second.name,
+                      series: element.series,
+                      link: element.matchUrl,
+                      needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo),
+                      league: element.league
+                  })
+              }
               this.defaultStats()
           }
       },
@@ -389,18 +551,92 @@
                   this.matchesCounter = 1
                   this.defaultStats()
                   
-                  this.emitEvent('start-find-historical', this.selectedMatch[0].link,
-                    {
-                        time: this.selectedTime,
-                        host: this.selectedHost,
-                        mutual: this.mutualCheckbox,
-                        leagues: this.searchOneLeagueCheckbox ? [ this.selectedMatch[0].league ] : [ ],
-                        sliceNMatches: this.sliceNMatches || undefined,
-                        removeUnsafeMatch: this.removeUnsafeMatch,
-                        needToParse: this.selectedMatch[0].needToParse,
-                    },
-                    { mode: this.selectedEvent, sub: this.selectedSubmode, limit: this.selectedMatch[0].series, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, yearFrom: this.sliceLastNYear || undefined, operation: this.operation }
-                  )
+                  const filterOptions = {
+                    time: this.selectedTime,
+                    host: this.selectedHost,
+                    mutual: this.mutualCheckbox,
+                    leagues: this.searchOneLeagueCheckbox ? [ this.selectedMatch[0].league ] : [ ],
+                    sliceNMatches: this.sliceNMatches || undefined,
+                    removeUnsafeMatch: this.removeUnsafeMatch,
+                    needToParse: this.selectedMatch[0].needToParse,
+                  }
+                  const analizeOptions = { mode: this.selectedEvent, sub: this.selectedSubmode, limit: this.selectedMatch[0].series, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, yearFrom: this.sliceLastNYear || undefined, operation: this.operation }
+                
+                  const match = this.matches.filter(x => this.selectedMatch[0].link === x.link)[0]
+
+                  const filteredFirst = this.filterGames(match.first.name, { matchesInfo: match.first.matches }, match.second.name, filterOptions)
+                  const analizedFirst = this.analizeTeam(filteredFirst, match.first.name, { ...analizeOptions, limit: analizeOptions.limit[0] })
+
+                  const filteredSecond = this.filterGames(match.second.name, { matchesInfo: match.second.matches }, match.first.name, filterOptions)
+                  const analizedSecond = this.analizeTeam(filteredSecond, match.second.name, { ...analizeOptions, limit: analizeOptions.limit[1] })
+
+                  const results = []
+
+                  for (const [ind, analized] of [analizedFirst, analizedSecond].entries()) {
+                      let historicalSeriesMatch = { gamesAfterLimit: [] }
+
+                      if (filterOptions.needToParse[ind]) {
+                          historicalSeriesMatch = analized
+                          historicalSeriesMatch.matchUrl = `${this.URL}${match.matchId}/results`
+
+                          // TODO: do we need to remove element in case of one league search (&& !(filterOptions.league && filterOptions.league.length > 0))
+                          if (filterOptions.removeUnsafeMatch) {
+                              console.log(`Deleted ${historicalSeriesMatch.reps[0]} first elements.`)
+
+                              if (historicalSeriesMatch.reps[0] === historicalSeriesMatch.series[0]) {
+                                  Object.keys(historicalSeriesMatch).forEach(key => {
+                                      if (typeof historicalSeriesMatch[key] == 'object') // array
+                                          historicalSeriesMatch[key] = historicalSeriesMatch[key].slice(1)
+                                  })
+                              }
+
+                          }
+                      }
+
+                    //   newElementFoundCallback(historicalSeriesMatch)
+                      results.push(historicalSeriesMatch)
+                  }
+
+                  this.matchesCounter = 1
+                  this.historicalMatches = []
+                  for (const [inx, elements] of results.entries()) {
+                      for (const [index, element] of elements.gamesAfterLimit.entries()) {
+                          console.log('123123', this.selectedMatch[0].series, elements.series[index])
+                          if (element === null || element === undefined) continue
+                          if (this.selectedMatch[0].series[this.matchesCounter - 1] >= this.seriesLimit &&
+                              this.selectedMatch[0].series[this.matchesCounter - 1] <= this.seriesLimitTo)
+                          if (this.selectedMatch[0].series[this.matchesCounter - 1] <= elements.series[index]) {
+                              this.historicalMatches.push({
+                                  inx: this.matchesCounter,
+                                  date: element.timeOrStatus,
+                                  firstTeam: element.first.name,
+                                  secondTeam: element.second.name,
+                                  goals: `${element.first.goals} - ${element.second.goals}`,
+                                  goalsFirst: element.first.goalsFirstTime !== undefined ? `${element.first.goalsFirstTime} - ${element.second.goalsFirstTime}` : undefined,
+                                  goalsSecond: element.first.goalsSecondTime !== undefined ? `${element.first.goalsSecondTime} - ${element.second.goalsSecondTime}` : undefined,
+                                  series: elements.series[index],
+                                  interrupted: this.selectedMatch[0].series[this.matchesCounter - 1] == elements.series[index],
+                                  link: match[inx === 0 ? 'first' : 'second'].url,
+                                  totalMatches: match[inx === 0 ? 'first' : 'second'].matches.length,
+                              })
+                          }
+                      }
+                      this.matchesCounter++
+                  }
+                  this.loading.seriesTable = false
+                  
+                //   this.emitEvent('start-find-historical', this.selectedMatch[0].link,
+                //     {
+                //         time: this.selectedTime,
+                //         host: this.selectedHost,
+                //         mutual: this.mutualCheckbox,
+                //         leagues: this.searchOneLeagueCheckbox ? [ this.selectedMatch[0].league ] : [ ],
+                //         sliceNMatches: this.sliceNMatches || undefined,
+                //         removeUnsafeMatch: this.removeUnsafeMatch,
+                //         needToParse: this.selectedMatch[0].needToParse,
+                //     },
+                //     { mode: this.selectedEvent, sub: this.selectedSubmode, limit: this.selectedMatch[0].series, arg: +this.goalsArg, limitTo: +this.seriesLimitTo, yearFrom: this.sliceLastNYear || undefined, operation: this.operation }
+                //   )
               }
             },
             historicalMatches() {
@@ -430,129 +666,161 @@
               return this.leagues.findIndex(x => x === this.chosenLeague) 
           }
       },
-      created() {
+      async created() {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        const todayFromLocalStorage = JSON.parse(localStorage.getItem('today') || '0')
+
+        this.matches = JSON.parse(localStorage.getItem('matches') || '[]')
+
+        // if (this.matches.length === 0 || new Date(todayFromLocalStorage).getTime() !== today.getTime()) {
+            let snap
+
+            try {
+                snap = await (await fetch('http://localhost:3000/matches')).json()
+            } catch {
+                console.log('Error in fetch, getting data from db')
+                snap = await db.collection('current').where('date', '==', today).get()
+                snap = snap.docs.map(x => x.data())
+            }
+
+            this.matches = snap
+
+            // if (!snap.empty) localStorage.setItem('matches', JSON.stringify(this.matches) || '[]')
+
+            localStorage.setItem('today', JSON.stringify(today) || '0')
+        // }
+
+        console.log(this.matches)
+        // console.log((await db.collection('matchesToParse').where('forDate', '==', today).get()).docs[0])
+        try {
+            this.leagues = [...new Set([...(await db.collection('matchesToParse').where('forDate', '==', today).get()).docs[0].data().leagues])]
+        } catch {}
+        this.loading.leagues = false
+
         this.seriesMatches = JSON.parse(localStorage.getItem('seriesMatches') || '[]')
 
-        this.socket = io('ws://localhost:3001')
+        // this.socket = io('ws://localhost:3001')
 
-        this.socket.on('connect', () => {
-            console.log('Connected...')
+        // this.socket.on('connect', () => {
+        //     console.log('Connected...')
             
-            this.socket.on('leagues', (leagues) => {
-                // console.log('Got leagues', leagues)
-                this.leagues = leagues
-                this.loading.leagues = false
-            })
+        //     this.socket.on('leagues', (leagues) => {
+        //         // console.log('Got leagues', leagues)
+        //         this.leagues = leagues
+        //         this.loading.leagues = false
+        //     })
     
-            this.socket.on('found-series', (matches) => {
-                console.log(matches)
-                this.seriesMatches = []
-                for (const [inx, element] of matches.entries()) {
-                    this.seriesMatches.push({
-                        firstTeam: element.first.name,
-                        secondTeam: element.second.name,
-                        series: element.series,
-                        link: element.matchUrl,
-                        needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo),
-                        league: element.league
-                    })
-                }
-                localStorage.setItem('seriesMatches', JSON.stringify(this.seriesMatches))
-                this.loading.table = false
-            })
+        //     this.socket.on('found-series', (matches) => {
+        //         console.log(matches)
+        //         this.seriesMatches = []
+        //         for (const [inx, element] of matches.entries()) {
+        //             this.seriesMatches.push({
+        //                 firstTeam: element.first.name,
+        //                 secondTeam: element.second.name,
+        //                 series: element.series,
+        //                 link: element.matchUrl,
+        //                 needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo),
+        //                 league: element.league
+        //             })
+        //         }
+        //         localStorage.setItem('seriesMatches', JSON.stringify(this.seriesMatches))
+        //         this.loading.table = false
+        //     })
 
-            this.socket.on('found-historical-series', (matches) => {
-                console.log(matches)
-                this.matchesCounter = 1
-                this.historicalMatches = []
-                for (const [inx, elements] of matches.entries()) {
-                    for (const [index, element] of elements.gamesAfterLimit.entries()) {
-                        console.log('123123', this.selectedMatch[0].series, elements.series[index])
-                        if (element === null) continue
-                        if (this.selectedMatch[0].series[this.matchesCounter - 1] >= this.seriesLimit &&
-                            this.selectedMatch[0].series[this.matchesCounter - 1] <= this.seriesLimitTo)
-                        if (this.selectedMatch[0].series[this.matchesCounter - 1] <= elements.series[index]) {
-                            this.historicalMatches.push({
-                                inx: this.matchesCounter,
-                                date: element.timeOrStatus,
-                                firstTeam: element.first.name,
-                                secondTeam: element.second.name,
-                                goals: `${element.first.goals} - ${element.second.goals}`,
-                                goalsFirst: element.first.goalsFirstTime !== undefined ? `${element.first.goalsFirstTime} - ${element.second.goalsFirstTime}` : undefined,
-                                goalsSecond: element.first.goalsSecondTime !== undefined ? `${element.first.goalsSecondTime} - ${element.second.goalsSecondTime}` : undefined,
-                                series: elements.series[index],
-                                interrupted: this.selectedMatch[0].series[this.matchesCounter - 1] == elements.series[index],
-                                link: elements.matchUrl,
-                                totalMatches: elements.totalMatches,
-                            })
-                        }
-                    }
-                    this.matchesCounter++
-                }
-                this.loading.seriesTable = false
-            })
+        //     this.socket.on('found-historical-series', (matches) => {
+        //         console.log(matches)
+        //         this.matchesCounter = 1
+        //         this.historicalMatches = []
+        //         for (const [inx, elements] of matches.entries()) {
+        //             for (const [index, element] of elements.gamesAfterLimit.entries()) {
+        //                 console.log('123123', this.selectedMatch[0].series, elements.series[index])
+        //                 if (element === null) continue
+        //                 if (this.selectedMatch[0].series[this.matchesCounter - 1] >= this.seriesLimit &&
+        //                     this.selectedMatch[0].series[this.matchesCounter - 1] <= this.seriesLimitTo)
+        //                 if (this.selectedMatch[0].series[this.matchesCounter - 1] <= elements.series[index]) {
+        //                     this.historicalMatches.push({
+        //                         inx: this.matchesCounter,
+        //                         date: element.timeOrStatus,
+        //                         firstTeam: element.first.name,
+        //                         secondTeam: element.second.name,
+        //                         goals: `${element.first.goals} - ${element.second.goals}`,
+        //                         goalsFirst: element.first.goalsFirstTime !== undefined ? `${element.first.goalsFirstTime} - ${element.second.goalsFirstTime}` : undefined,
+        //                         goalsSecond: element.first.goalsSecondTime !== undefined ? `${element.first.goalsSecondTime} - ${element.second.goalsSecondTime}` : undefined,
+        //                         series: elements.series[index],
+        //                         interrupted: this.selectedMatch[0].series[this.matchesCounter - 1] == elements.series[index],
+        //                         link: elements.matchUrl,
+        //                         totalMatches: elements.totalMatches,
+        //                     })
+        //                 }
+        //             }
+        //             this.matchesCounter++
+        //         }
+        //         this.loading.seriesTable = false
+        //     })
     
-            this.socket.on('new-element', (element) => {
-                this.seriesMatches.push({
-                    firstTeam: element.first.name,
-                    secondTeam: element.second.name,
-                    series: element.series,
-                    link: element.matchUrl,
-                    needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo),
-                    league: element.league
-                })
-            })
+        //     this.socket.on('new-element', (element) => {
+        //         this.seriesMatches.push({
+        //             firstTeam: element.first.name,
+        //             secondTeam: element.second.name,
+        //             series: element.series,
+        //             link: element.matchUrl,
+        //             needToParse: element.series.map(x => x >= this.seriesLimit && x <= this.seriesLimitTo),
+        //             league: element.league
+        //         })
+        //     })
 
-            this.socket.on('new-element-historical', (elements) => {
-                console.log('We got new historical element', elements)
-                for (const [index, element] of elements.gamesAfterLimit.entries()) {
-                    console.log('123123', this.selectedMatch[0].series, elements.series[index])
-                    if (element === null) continue
-                    if (this.selectedMatch[0].series[this.matchesCounter - 1] >= this.seriesLimit &&
-                        this.selectedMatch[0].series[this.matchesCounter - 1] <= this.seriesLimitTo)
-                    if (this.selectedMatch[0].series[this.matchesCounter - 1] <= elements.series[index]) {
-                        this.historicalMatches.push({
-                            inx: this.matchesCounter,
-                            date: element.timeOrStatus,
-                            firstTeam: element.first.name,
-                            secondTeam: element.second.name,
-                            goals: `${element.first.goals} - ${element.second.goals}`,
-                            goalsFirst: element.first.goalsFirstTime !== undefined ? `${element.first.goalsFirstTime} - ${element.second.goalsFirstTime}` : undefined,
-                            goalsSecond: element.first.goalsSecondTime !== undefined ? `${element.first.goalsSecondTime} - ${element.second.goalsSecondTime}` : undefined,
-                            series: elements.series[index],
-                            interrupted: this.selectedMatch[0].series[this.matchesCounter - 1] == elements.series[index],
-                            link: elements.matchUrl,
-                            totalMatches: elements.totalMatches,
-                        })
-                    }
-                }
-                this.matchesCounter++
-            })
+        //     this.socket.on('new-element-historical', (elements) => {
+        //         console.log('We got new historical element', elements)
+        //         for (const [index, element] of elements.gamesAfterLimit.entries()) {
+        //             console.log('123123', this.selectedMatch[0].series, elements.series[index])
+        //             if (element === null) continue
+        //             if (this.selectedMatch[0].series[this.matchesCounter - 1] >= this.seriesLimit &&
+        //                 this.selectedMatch[0].series[this.matchesCounter - 1] <= this.seriesLimitTo)
+        //             if (this.selectedMatch[0].series[this.matchesCounter - 1] <= elements.series[index]) {
+        //                 this.historicalMatches.push({
+        //                     inx: this.matchesCounter,
+        //                     date: element.timeOrStatus,
+        //                     firstTeam: element.first.name,
+        //                     secondTeam: element.second.name,
+        //                     goals: `${element.first.goals} - ${element.second.goals}`,
+        //                     goalsFirst: element.first.goalsFirstTime !== undefined ? `${element.first.goalsFirstTime} - ${element.second.goalsFirstTime}` : undefined,
+        //                     goalsSecond: element.first.goalsSecondTime !== undefined ? `${element.first.goalsSecondTime} - ${element.second.goalsSecondTime}` : undefined,
+        //                     series: elements.series[index],
+        //                     interrupted: this.selectedMatch[0].series[this.matchesCounter - 1] == elements.series[index],
+        //                     link: elements.matchUrl,
+        //                     totalMatches: elements.totalMatches,
+        //                 })
+        //             }
+        //         }
+        //         this.matchesCounter++
+        //     })
     
-            this.socket.on('stats', (key, stage, inc, total, notIncrementally) => {
-                console.log('stats', stage, inc, total, arguments)
-                if (!this.stats[key]) {
-                    this.stats[key] = {
-                        stage: stage, current: inc, total: total
-                    }
-                } else {
-                    if (this.stats[key].stage - 1 !== stage) {
-                        this.stats[key].current = 0
-                    }
-                    this.stats[key].stage = stage + 1
+        //     this.socket.on('stats', (key, stage, inc, total, notIncrementally) => {
+        //         console.log('stats', stage, inc, total, arguments)
+        //         if (!this.stats[key]) {
+        //             this.stats[key] = {
+        //                 stage: stage, current: inc, total: total
+        //             }
+        //         } else {
+        //             if (this.stats[key].stage - 1 !== stage) {
+        //                 this.stats[key].current = 0
+        //             }
+        //             this.stats[key].stage = stage + 1
 
-                    if (notIncrementally)
-                        this.stats[key].current = inc
-                    else
-                        this.stats[key].current += inc
+        //             if (notIncrementally)
+        //                 this.stats[key].current = inc
+        //             else
+        //                 this.stats[key].current += inc
                         
-                    this.stats[key].total = total
-                }
-            })
-        })
+        //             this.stats[key].total = total
+        //         }
+        //     })
+        // })
 
 
-        window.onunload = () => { console.log('unloading'); this.socket.emit('disconnect') }
+        // window.onunload = () => { console.log('unloading'); this.socket.emit('disconnect') }
       }
     }      
       
