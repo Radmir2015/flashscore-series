@@ -111,7 +111,12 @@ class FlashScore {
                     if (timeOrStatus.slice(-1)[0] === '.') timeOrStatus += new Date().getFullYear()
     
                     const goals = (await (await x.findElements(By.css('.event__scores')))[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
-                    const goalsFirstTime = (await (await x.findElements(By.css('.event__part'))).slice(-1)[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
+
+                    const goalsFirstTimeElement = (await x.findElements(By.css('.event__part'))).slice(-1)
+                    let goalsFirstTime
+                    if (goalsFirstTimeElement.length >= 1) {
+                        goalsFirstTime = (await goalsFirstTime[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
+                    }
                     // win lose draw
                     const wld = await (await x.findElements(By.css('.wld')))[0].getText()
     
@@ -119,14 +124,14 @@ class FlashScore {
                         first: {
                             name: teams[0],
                             goals: goals[0],
-                            goalsFirstTime: goalsFirstTime[0],
-                            goalsSecondTime: (goals[2] || goals[0]) - goalsFirstTime[0],
+                            goalsFirstTime: goalsFirstTime ? goalsFirstTime[0] : 0,
+                            goalsSecondTime: goalsFirstTime ? ((goals[2] || goals[0]) - goalsFirstTime[0]) : 0,
                         },
                         second: {
                             name: teams[1],
                             goals: goals[1],
-                            goalsFirstTime: goalsFirstTime[1],
-                            goalsSecondTime: (goals[3] || goals[1]) - goalsFirstTime[1],
+                            goalsFirstTime: goalsFirstTime ? goalsFirstTime[1] : 0,
+                            goalsSecondTime: goalsFirstTime ? ((goals[3] || goals[1]) - goalsFirstTime[1]) : 0,
                         },
                         result: wld,
                         timeOrStatus,

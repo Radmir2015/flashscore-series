@@ -445,10 +445,10 @@
               if (options.host == 'home')
                   matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.first))
               else if (options.host == 'away')
-                  matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.second, opponentTeamName))
+                  matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.second))
 
               if (options.mutual) {
-                  matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.first) && nameCompare(x.second, opponentTeamName))
+                  matches.matchesInfo = matches.matchesInfo.filter(x => nameCompare(x.first) && nameCompare(x.second, opponentTeamName) || nameCompare(x.first, opponentTeamName) && nameCompare(x.second))
               }
               console.log('filter after', teamName, opponentTeamName, matches.matchesInfo.length)
 
