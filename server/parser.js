@@ -608,11 +608,10 @@ class FlashScore {
     }
 
     async fillingDatabase(sendStatistics, callbacks) {
-        // if (await this.driver.getCurrentUrl() !== this.URL)
-        try {
-            await this.driver.get(this.URL)
-            (await this.driver.switchTo().alert()).accept()
-        } catch {}
+        if (await this.driver.getCurrentUrl() !== this.URL) await this.driver.get(this.URL)
+        // try {
+        //     (await this.driver.switchTo().alert()).accept()
+        // } catch {}
 
         const datapickerText = await (await this.driver.findElements(By.css('.calendar__datepicker')))[0].getText()
         const dateOfMatch = new Date([...[...datapickerText.split('/').map(x => parseInt(x))].reverse(), new Date().getFullYear()].join('/'))
