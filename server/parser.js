@@ -115,7 +115,7 @@ class FlashScore {
                     const goalsFirstTimeElement = (await x.findElements(By.css('.event__part'))).slice(-1)
                     let goalsFirstTime
                     if (goalsFirstTimeElement.length >= 1) {
-                        goalsFirstTime = (await goalsFirstTime[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
+                        goalsFirstTime = (await goalsFirstTimeElement[0].getText()).replace(/\s/g, '').match(/(\d+)/g)
                     }
                     // win lose draw
                     const wld = await (await x.findElements(By.css('.wld')))[0].getText()
