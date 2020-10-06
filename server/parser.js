@@ -608,7 +608,8 @@ class FlashScore {
     }
 
     async fillingDatabase(sendStatistics, callbacks) {
-        if (await this.driver.getCurrentUrl() !== this.URL) await this.driver.get(this.URL)
+        // if (await this.driver.getCurrentUrl() !== this.URL)
+        await this.driver.get(this.URL)
 
         const datapickerText = await (await this.driver.findElements(By.css('.calendar__datepicker')))[0].getText()
         const dateOfMatch = new Date([...[...datapickerText.split('/').map(x => parseInt(x))].reverse(), new Date().getFullYear()].join('/'))
