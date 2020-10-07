@@ -30,7 +30,12 @@ const parseProcess = async () => {
             // socket.emit('stats', key, stage, inc, total)
         }, {
             assign: (key, obj) => matches[key] = obj,
-            push: (key, element) => matches[key].push(element),
+            push: (key, element) => {
+                if (!matches[key])
+                    matches[key] = []
+                else
+                    matches[key].push(element)
+            },
             matches
         })
         status.parsing = false
@@ -58,7 +63,7 @@ app.get('/status', async (req, res) => {
 })
 
 app.get('/matches', async (req, res) => {
-    if (matches[0].length > 0)
+    if (matches[0] && matches[0].length > 0)
         res.status(200).json(matches[0])
     else {
         const today = new Date()
