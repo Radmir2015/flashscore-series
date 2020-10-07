@@ -7,11 +7,12 @@ const db = require('../db').db
 
 const Flashscore = require('./parser')
 
-const status = {}
+const status = { parsing: false }
 let matches = []
 
 const parseProcess = async () => {
     try {
+        status.parsing = true
         await checkBrowser()
         await flash.fillingDatabase((key, stage, inc, total, notIncrementally) => {
             console.log(key, stage, inc, total)
@@ -32,8 +33,10 @@ const parseProcess = async () => {
             push: element => matches.push(element),
             matches
         })
+        status.parsing = false
     } catch (err) {
         console.log(err)
+        status.parsing = false
         setTimeout(async () => await parseProcess(), 5000)
     }
 }
@@ -43,8 +46,10 @@ app.get('/', async (req, res) => {
 })
 
 app.get('/start', async (req, res) => {
-    await parseProcess()
-    res.status(200).json({ status: 'ok', browserIsOn: !!flash, leaguesParsed: leagues && leagues.length > 0 })
+    if (!status.parsing) {
+        await parseProcess()
+    }
+    res.status(200).json({ status: 'ok', browserIsOn: !!flash, leaguesParsed: leagues && leagues.length > 0, parsing: status.parsing })
 })
 
 app.get('/status', async (req, res) => {
