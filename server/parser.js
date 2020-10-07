@@ -1,6 +1,8 @@
 const { Builder, By, Key, until, Capabilities } = require('selenium-webdriver')
 // const firefox = require('selenium-webdriver/firefox')
 const chrome = require('selenium-webdriver/chrome')
+
+const { performance } = require('perf_hooks')
 const db = require('../db').db
 
 class FlashScore {
@@ -88,7 +90,13 @@ class FlashScore {
                     ]
         ` : `//div[contains(@class, 'event__match')]`
 
-        const matches = (await this.driver.findElements(By.xpath(xpath))).slice(sliceFrom, sliceTo)
+        const xpathLastLeague = `//div[contains(@class, 'event__header')][${index}]/following-sibling::div[contains(@class, 'event__match')]`
+
+        let matches = (await this.driver.findElements(By.xpath(xpath))).slice(sliceFrom, sliceTo)
+
+        if (!allMatches && matches.length === 0) {
+            matches = (await this.driver.findElements(By.xpath(xpathLastLeague))).slice(sliceFrom, sliceTo)
+        }
                 
         const matchesInfo = []
         const strings = []
@@ -123,14 +131,14 @@ class FlashScore {
                     const infoDict = {
                         first: {
                             name: teams[0],
-                            goals: goals[0],
-                            goalsFirstTime: goalsFirstTime ? goalsFirstTime[0] : 0,
+                            goals: +goals[0],
+                            goalsFirstTime: goalsFirstTime ? +goalsFirstTime[0] : 0,
                             goalsSecondTime: goalsFirstTime ? ((goals[2] || goals[0]) - goalsFirstTime[0]) : 0,
                         },
                         second: {
                             name: teams[1],
-                            goals: goals[1],
-                            goalsFirstTime: goalsFirstTime ? goalsFirstTime[1] : 0,
+                            goals: +goals[1],
+                            goalsFirstTime: goalsFirstTime ? +goalsFirstTime[1] : 0,
                             goalsSecondTime: goalsFirstTime ? ((goals[3] || goals[1]) - goalsFirstTime[1]) : 0,
                         },
                         result: wld,
@@ -352,7 +360,6 @@ class FlashScore {
     async getAllMatchesOfTeam(teamUrl, ind, teamNames, filterOptions, analizeOptions, sendStatistics) {
         await this.driver.get(teamUrl)
 
-        const { performance } = require('perf_hooks')
         const time = performance.now()
         
         // expand till the end OR till set year
@@ -424,14 +431,14 @@ class FlashScore {
         console.log('Matches length =', matches.matches.length)
         console.log('Elapsed time', performance.now() - time)
 
-        const teamName = (await (await this.driver.findElements(By.css('.teamHeader__name')))[0].getText()).trim()
-
-        console.log(teamName)
-
+        console.log(teamNames)
+        
         // console.log(JSON.stringify(matches.matchesInfo, null, 4))
         console.log('analizy options', analizeOptions, ind)
-
+        
         if (filterOptions.pureMatches) return matches.matchesInfo
+
+        const teamName = (await (await this.driver.findElements(By.css('.teamHeader__name')))[0].getText()).trim()
 
         const filtered = this.filterGames(teamNames[0], matches, teamNames[1], filterOptions)
         return { ...this.analizeTeam(filtered, teamName, { ...analizeOptions, limit: analizeOptions.limit[ind] }), totalMatches: matches.matches.length }
@@ -607,161 +614,157 @@ class FlashScore {
         return fitTeams
     }
 
-    async fillingDatabase(sendStatistics, callbacks) {
-        if (await this.driver.getCurrentUrl() !== this.URL) await this.driver.get(this.URL)
+    async fillingDatabase(sendStatistics, callbacks, daysAhead = 2) {
         // try {
         //     (await this.driver.switchTo().alert()).accept()
         // } catch {}
 
-        const datapickerText = await (await this.driver.findElements(By.css('.calendar__datepicker')))[0].getText()
-        const dateOfMatch = new Date([...[...datapickerText.split('/').map(x => parseInt(x))].reverse(), new Date().getFullYear()].join('/'))
-        const previousDay = new Date(dateOfMatch.getTime())
-        previousDay.setDate(dateOfMatch.getDate() - 1)
+        const deleteOutdatedDocs = async previousDate => {
+            await Promise.all((await db.collection('matchesToParse').where('forDate', '<=', previousDate).get())
+                .docs.map(async doc => await doc.ref.delete()))
 
-        // const fitTeams = []
-        let matchesId, leaguesAndMatches = { leagues: [] }
-
-        const progressDoc = await db.collection('progress').doc('status').get()
-        if (!progressDoc.empty) {
-            const docData = progressDoc.data()
-            const everythingParsed = docData.date.toDate().getTime() === dateOfMatch.getTime() && docData.finished
-            console.log('Everything is already parsed:', everythingParsed)
-            if (everythingParsed) return
+            await Promise.all((await db.collection('current').where('date', '<=', previousDate).get())
+                .docs.map(async doc => await doc.ref.delete()))
         }
 
-        await Promise.all((await db.collection('matchesToParse').where('forDate', '<=', previousDay).get())
-            .docs.map(async doc => await doc.ref.delete()))
+        for (let idate = 0; idate < daysAhead; idate++) {
+            if (await this.driver.getCurrentUrl() !== this.URL) await this.driver.get(this.URL)
+            
+            const datapickerElement = (await this.driver.findElements(By.css('.calendar__datepicker')))[0]
 
-        const matchesToParseSnap = await db.collection('matchesToParse').where('forDate', '==', dateOfMatch).get()
+            if (idate !== 0) {
+                await datapickerElement.click()
 
-        if (matchesToParseSnap.empty) {
-            leaguesAndMatches = await this.getMatchIdArraySequentally({ needToExpand: true, onlyMatches: true })
-            await db.collection('matchesToParse').add({
-                forDate: dateOfMatch,
-                ...leaguesAndMatches
-            })
-        } else {
-            // console.log(matchesToParseSnap)
-            const matchesToParse = matchesToParseSnap.docs[0].data()
-            leaguesAndMatches = matchesToParse
-        }
-        matchesId = leaguesAndMatches.matches
-
-        console.log('matchesId', matchesId)
-        console.log(matchesId.length)
-
-        await Promise.all((await db.collection('current').where('date', '<=', previousDay).get())
-            .docs.map(async doc => await doc.ref.delete()))
-
-        let matchesInDb = await db.collection('current').where('date', '==', dateOfMatch).get()
-        let matchesIdsInDb
-
-        if (!matchesInDb.empty) {
-            matchesInDb = matchesInDb.docs.map(x => x.data())
-            callbacks.assign(matchesInDb)
-            matchesIdsInDb = matchesInDb.reduce((a, b) => [ ...a, b.matchId ], [])
-        }
-
-        for (let i = 1; i < matchesId.length + 1; i++) {
-            if (matchesIdsInDb && matchesIdsInDb.includes(matchesId[i - 1])) {
-                console.log(`We have a match with id: ${matchesId[i - 1]} in the db (skipping).`)
-                continue
+                const datesElement = (await this.driver.findElements(By.css('.calendar__datepicker--dates')))[0]
+                // await (await datesElement.findElements(By.css('.day')))[7 + i].click()
+                await this.driver.executeScript('arguments[0].click()', (await datesElement.findElements(By.css('.day')))[7 + i])
+                // await this.driver.findElements(By.xpath('//div[@class="calendar__datepicker--dates"]/'))
+                // const nextDayElement = await this.driver.findElements(By.css('.calendar__direction--tomorrow'))[0]
             }
-            if (i % 10 === 0) {
-                await db.collection('progress').doc('status').update({
-                    current: i,
-                    total: matchesId.length,
-                    finished: false,
-                    date: dateOfMatch
+
+            const datapickerText = await datapickerElement.getText()
+            const dateOfMatch = new Date([...[...datapickerText.split('/').map(x => parseInt(x))].reverse(), new Date().getFullYear()].join('/'))
+            const previousDay = new Date(dateOfMatch.getTime())
+            previousDay.setDate(dateOfMatch.getDate() - 1)
+
+            console.log('Parsing matches for', dateOfMatch)
+
+            // console.log(await this.getAllMatchesOfTeam('https://www.flashscore.ru/team/pumas-tabasco/fsxIAE02/results/', 0, ['', ''], { withLeague: true, pureMatches: true }, {}, () => {}))
+
+            // return
+
+            // const fitTeams = []
+            let matchesId, leaguesAndMatches = { leagues: [] }
+    
+            const progressDoc = await db.collection('progress').where('date', '==', dateOfMatch).get()
+            if (!progressDoc.empty) {
+                const docData = progressDoc.docs[0].data()
+                const everythingParsed = docData.date.toDate().getTime() === dateOfMatch.getTime() && docData.finished
+                console.log('Everything is already parsed:', everythingParsed)
+                if (everythingParsed) return
+            }
+    
+            const matchesToParseSnap = await db.collection('matchesToParse').where('forDate', '==', dateOfMatch).get()
+    
+            if (matchesToParseSnap.empty) {
+                leaguesAndMatches = await this.getMatchIdArraySequentally({ needToExpand: true, onlyMatches: true })
+                await db.collection('matchesToParse').add({
+                    forDate: dateOfMatch,
+                    ...leaguesAndMatches
                 })
+            } else {
+                const matchesToParse = matchesToParseSnap.docs[0].data()
+                leaguesAndMatches = matchesToParse
             }
-            // await this.getMatch(0, i, matchesId)
-            const matchesInfoArray = await this.goToTeamPages(`${this.URL}match/${matchesId[i - 1]}`,
-            {
-                time: 0,
-                host: 'all',
-                mutual: false,
-                leagues: [],
-                searchOneLeague: false,
-                allMatchesSearch: true,
-                pureMatches: true,
-                withLeague: true,
-                sliceNMatches: undefined,
-                removeUnsafeMatch: false,
-                needToParse: [true, true]
-            },
-            {
-                mode: '',
-                sub: '',
-                limit: '',
-                arg: '',
-                limitTo: '',
-                yearFrom: 1,
-                operation: ''
-            }, () => {}, sendStatistics)
-
-            sendStatistics('matches', 0, 1, matchesId.length)
-
-            // for (let i = 0; i < matchesInfoArray.results.length; i++) {
-            //     const matchesIdsFromDb = []
-            //     for (let j = 0; j < matchesInfoArray.results[i].length; j++) {
-            //         // const matchId = (await db.collection('matches').add(matchesInfoArray.results[i][j])).id
-            //         matchesIdsFromDb.push(matchId)
-            //     }
-                // if (i == 0)
-                //     await db.collection('current').doc(id).set({ first: { matches: matchesIdsFromDb }}, { merge: true })
-                // else
-                //     await db.collection('current').doc(id).set({ second: { matches: matchesIdsFromDb }}, { merge: true })
-            // }
-
-            const currentMatch = {
-                link: `${this.URL}match/${matchesId[i - 1]}/#h2h`,
-                matchId: matchesId[i - 1],
-                league: leaguesAndMatches.leagues[i - 1],
-                date: dateOfMatch,
-                parsing_ended: new Date(),
-                first: {
-                    name: matchesInfoArray.teamNames[0],
-                    url: `${this.URL}${matchesInfoArray.teamUrls[0]}`,
-                    matches: matchesInfoArray.results[0]
-                },
-                second: {
-                    name: matchesInfoArray.teamNames[1],
-                    url: `${this.URL}${matchesInfoArray.teamUrls[1]}`,
-                    matches: matchesInfoArray.results[1]
+            matchesId = leaguesAndMatches.matches
+    
+            console.log('matchesId', matchesId)
+            console.log(matchesId.length)
+    
+            let matchesInDb = await db.collection('current').where('date', '==', dateOfMatch).get()
+            let matchesIdsInDb
+    
+            if (!matchesInDb.empty) {
+                matchesInDb = matchesInDb.docs.map(x => x.data())
+                callbacks.assign(matchesInDb)
+                matchesIdsInDb = matchesInDb.reduce((a, b) => [ ...a, b.matchId ], [])
+            }
+    
+            for (let i = 1; i < matchesId.length + 1; i++) {
+                if (matchesIdsInDb && matchesIdsInDb.includes(matchesId[i - 1])) {
+                    console.log(`We have a match with id: ${matchesId[i - 1]} in the db (skipping).`)
+                    continue
                 }
+                if (i % 10 === 0) {
+                    await (await db.collection('progress').where('date', '==', dateOfMatch).get()).docs[0].ref.update({
+                        current: i,
+                        total: matchesId.length,
+                        finished: false,
+                        date: dateOfMatch
+                    })
+                }
+    
+                const matchesInfoArray = await this.goToTeamPages(`${this.URL}match/${matchesId[i - 1]}`,
+                {
+                    time: 0,
+                    host: 'all',
+                    mutual: false,
+                    leagues: [],
+                    searchOneLeague: false,
+                    allMatchesSearch: true,
+                    pureMatches: true,
+                    withLeague: true,
+                    sliceNMatches: undefined,
+                    removeUnsafeMatch: false,
+                    needToParse: [true, true]
+                },
+                {
+                    mode: '',
+                    sub: '',
+                    limit: '',
+                    arg: '',
+                    limitTo: '',
+                    yearFrom: 1,
+                    operation: ''
+                }, () => {}, sendStatistics)
+    
+                sendStatistics('matches', 0, 1, matchesId.length)
+    
+                const currentMatch = {
+                    link: `${this.URL}match/${matchesId[i - 1]}/#h2h`,
+                    matchId: matchesId[i - 1],
+                    league: leaguesAndMatches.leagues[i - 1],
+                    date: dateOfMatch,
+                    parsing_ended: new Date(),
+                    first: {
+                        name: matchesInfoArray.teamNames[0],
+                        url: `${this.URL}${matchesInfoArray.teamUrls[0]}`,
+                        matches: matchesInfoArray.results[0]
+                    },
+                    second: {
+                        name: matchesInfoArray.teamNames[1],
+                        url: `${this.URL}${matchesInfoArray.teamUrls[1]}`,
+                        matches: matchesInfoArray.results[1]
+                    }
+                }
+    
+                callbacks.push(currentMatch)
+    
+                const id = (await db.collection('current').add(currentMatch)).id
             }
-
-            callbacks.push(currentMatch)
-
-            const id = (await db.collection('current').add(currentMatch)).id
-
-            // await db.collection('current').doc(id).set({ parsing_ended: new Date() }, { merge: true })
-
-                // {
-            //     first: {
-            //         name: teams[0],
-            //         goals: goals[0],
-            //         goalsFirstTime: goalsFirstTime[0],
-            //         goalsSecondTime: (goals[2] || goals[0]) - goalsFirstTime[0],
-            //     },
-            //     second: {
-            //         name: teams[1],
-            //         goals: goals[1],
-            //         goalsFirstTime: goalsFirstTime[1],
-            //         goalsSecondTime: (goals[3] || goals[1]) - goalsFirstTime[1],
-            //     },
-            //     result: wld,
-            //     timeOrStatus,
-            // }
+    
+            await (await db.collection('progress').where('date', '==', dateOfMatch).get()).docs[0].ref.update({
+                current: matchesId.length,
+                total: matchesId.length,
+                finished: true,
+                date: dateOfMatch
+            })
+            
+            if (idate === 0) {
+                await deleteOutdatedDocs(previousDay)
+            }
         }
 
-        await db.collection('progress').doc('status').update({
-            current: matchesId.length,
-            total: matchesId.length,
-            finished: true,
-            date: dateOfMatch
-        })
     }
 }
 
