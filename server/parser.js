@@ -702,12 +702,17 @@ class FlashScore {
                     continue
                 }
                 if (i % 10 === 0) {
-                    await (await db.collection('progress').where('date', '==', dateOfMatch).get()).docs[0].ref.update({
+                    const newStatusDoc = {
                         current: i,
                         total: matchesId.length,
                         finished: false,
                         date: dateOfMatch
-                    })
+                    }
+                    try {
+                        await (await db.collection('progress').where('date', '==', dateOfMatch).get()).docs[0].ref.update(newStatusDoc)
+                    } catch {
+                        await db.collection('progress').add(newStatusDoc)
+                    }
                 }
     
                 const matchesInfoArray = await this.goToTeamPages(`${this.URL}match/${matchesId[i - 1]}`,
