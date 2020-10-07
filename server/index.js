@@ -155,5 +155,7 @@ const checkBrowser = async () => {
 app.listen(port, async () => {
     console.log(`Server is listening at http://localhost:${port}`)
 
-    await parseProcess()
+    if (!status.parsing) {
+        await parseProcess()
+    }
 })
