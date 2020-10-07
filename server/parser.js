@@ -661,7 +661,12 @@ class FlashScore {
                 const docData = progressDoc.docs[0].data()
                 const everythingParsed = docData.date.toDate().getTime() === dateOfMatch.getTime() && docData.finished
                 console.log('Everything is already parsed:', everythingParsed)
-                if (everythingParsed) return
+                if (everythingParsed) {
+                    if (idate === daysAhead - 1)
+                        return
+                    else
+                        continue
+                }
             }
     
             const matchesToParseSnap = await db.collection('matchesToParse').where('forDate', '==', dateOfMatch).get()
