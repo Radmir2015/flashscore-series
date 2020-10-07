@@ -627,17 +627,17 @@ class FlashScore {
                 .docs.map(async doc => await doc.ref.delete()))
         }
 
-        for (let idate = 0; idate < daysAhead; idate++) {
+        for (let iday = 0; iday < daysAhead; iday++) {
             if (await this.driver.getCurrentUrl() !== this.URL) await this.driver.get(this.URL)
             
             const datapickerElement = (await this.driver.findElements(By.css('.calendar__datepicker')))[0]
 
-            if (idate !== 0) {
+            if (iday !== 0) {
                 await datapickerElement.click()
 
                 const datesElement = (await this.driver.findElements(By.css('.calendar__datepicker--dates')))[0]
                 // await (await datesElement.findElements(By.css('.day')))[7 + i].click()
-                await this.driver.executeScript('arguments[0].click()', (await datesElement.findElements(By.css('.day')))[7 + i])
+                await this.driver.executeScript('arguments[0].click()', (await datesElement.findElements(By.css('.day')))[7 + iday])
                 // await this.driver.findElements(By.xpath('//div[@class="calendar__datepicker--dates"]/'))
                 // const nextDayElement = await this.driver.findElements(By.css('.calendar__direction--tomorrow'))[0]
             }
@@ -649,6 +649,7 @@ class FlashScore {
 
             console.log('Parsing matches for', dateOfMatch)
 
+            if (!(dateOfMatch instanceof Date) || isNaN(dateOfMatch)) throw new Error('Invalid Date')
             // console.log(await this.getAllMatchesOfTeam('https://www.flashscore.ru/team/pumas-tabasco/fsxIAE02/results/', 0, ['', ''], { withLeague: true, pureMatches: true }, {}, () => {}))
 
             // return
@@ -662,7 +663,7 @@ class FlashScore {
                 const everythingParsed = docData.date.toDate().getTime() === dateOfMatch.getTime() && docData.finished
                 console.log('Everything is already parsed:', everythingParsed)
                 if (everythingParsed) {
-                    if (idate === daysAhead - 1)
+                    if (iday === daysAhead - 1)
                         return
                     else
                         continue
@@ -691,7 +692,7 @@ class FlashScore {
     
             if (!matchesInDb.empty) {
                 matchesInDb = matchesInDb.docs.map(x => x.data())
-                callbacks.assign(idate, matchesInDb) // dateOfMatch.toLocaleDateString()
+                callbacks.assign(iday, matchesInDb) // dateOfMatch.toLocaleDateString()
                 matchesIdsInDb = matchesInDb.reduce((a, b) => [ ...a, b.matchId ], [])
             }
     
@@ -753,7 +754,7 @@ class FlashScore {
                     }
                 }
     
-                callbacks.push(idate, currentMatch)
+                callbacks.push(iday, currentMatch)
     
                 const id = (await db.collection('current').add(currentMatch)).id
             }
@@ -765,7 +766,7 @@ class FlashScore {
                 date: dateOfMatch
             })
             
-            if (idate === 0) {
+            if (iday === 0) {
                 await deleteOutdatedDocs(previousDay)
             }
         }

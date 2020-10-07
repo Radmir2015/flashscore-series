@@ -37,7 +37,7 @@ const parseProcess = async () => {
     } catch (err) {
         console.log(err)
         status.parsing = false
-        setTimeout(async () => await parseProcess(), 5000)
+        setTimeout(async () => await parseProcess(), 10000)
     }
 }
 
