@@ -686,7 +686,7 @@ class FlashScore {
     
             if (!matchesInDb.empty) {
                 matchesInDb = matchesInDb.docs.map(x => x.data())
-                callbacks.assign(matchesInDb)
+                callbacks.assign(idate, matchesInDb) // dateOfMatch.toLocaleDateString()
                 matchesIdsInDb = matchesInDb.reduce((a, b) => [ ...a, b.matchId ], [])
             }
     
@@ -748,7 +748,7 @@ class FlashScore {
                     }
                 }
     
-                callbacks.push(currentMatch)
+                callbacks.push(idate, currentMatch)
     
                 const id = (await db.collection('current').add(currentMatch)).id
             }

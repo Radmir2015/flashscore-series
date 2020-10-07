@@ -8,7 +8,7 @@ const db = require('../db').db
 const Flashscore = require('./parser')
 
 const status = { parsing: false }
-let matches = []
+let matches = {}
 
 const parseProcess = async () => {
     try {
@@ -29,8 +29,8 @@ const parseProcess = async () => {
             }
             // socket.emit('stats', key, stage, inc, total)
         }, {
-            assign: obj => matches = obj,
-            push: element => matches.push(element),
+            assign: (key, obj) => matches[key] = obj,
+            push: (key, element) => matches[key].push(element),
             matches
         })
         status.parsing = false
@@ -54,12 +54,12 @@ app.get('/start', async (req, res) => {
 
 app.get('/status', async (req, res) => {
     await checkBrowser()
-    res.status(200).json(status)
+    res.status(200).json({ ...status, matches })
 })
 
 app.get('/matches', async (req, res) => {
-    if (matches.length > 0)
-        res.status(200).json(matches)
+    if (matches[0].length > 0)
+        res.status(200).json(matches[0])
     else {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
@@ -67,9 +67,9 @@ app.get('/matches', async (req, res) => {
         let matchesInDb = await db.collection('current').where('date', '==', today).get()
         if (!matchesInDb.empty) {
             matchesInDb = matchesInDb.docs.map(x => x.data())
-            matches = matchesInDb
+            matches[0] = matchesInDb
         }
-        res.status(200).json(matches)
+        res.status(200).json(matches[0])
     }
 })
 
