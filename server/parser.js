@@ -132,14 +132,14 @@ class FlashScore {
                         first: {
                             name: teams[0],
                             goals: +goals[0],
-                            goalsFirstTime: goalsFirstTime ? +goalsFirstTime[0] : 0,
-                            goalsSecondTime: goalsFirstTime ? ((goals[2] || goals[0]) - goalsFirstTime[0]) : 0,
+                            goalsFirstTime: goalsFirstTime ? +goalsFirstTime[0] : undefined,
+                            goalsSecondTime: goalsFirstTime ? ((goals[2] || goals[0]) - goalsFirstTime[0]) : undefined,
                         },
                         second: {
                             name: teams[1],
                             goals: +goals[1],
-                            goalsFirstTime: goalsFirstTime ? +goalsFirstTime[1] : 0,
-                            goalsSecondTime: goalsFirstTime ? ((goals[3] || goals[1]) - goalsFirstTime[1]) : 0,
+                            goalsFirstTime: goalsFirstTime ? +goalsFirstTime[1] : undefined,
+                            goalsSecondTime: goalsFirstTime ? ((goals[3] || goals[1]) - goalsFirstTime[1]) : undefined,
                         },
                         result: wld,
                         timeOrStatus,
