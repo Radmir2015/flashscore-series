@@ -390,7 +390,7 @@
               let wlSeq, goalsReps, hitgateReps
 
               if (options.mode == 'winlose') {
-                  wlSeq = games.map(x => x.result).join('')
+                  wlSeq = games.map(x => x.filteredResult || 'U').join('') // if undefined replace to random letter (but not from helpDict) to interrupt series
 
                   if (options.sub[0] == 'o') {
                       const removeChars = wlHelpDict[options.sub[1]]
@@ -414,11 +414,11 @@
                   }
               } else if (options.mode == 'hitgate') {
                   if (options.sub == 'both') {
-                      hitgateReps = games.map(x => +(x.first.goals > 0 && x.second.goals > 0)).join('').replace(/0/g, '.').split('.').map(x => x.length)
+                      hitgateReps = games.map(x => +(x.first.filteredGoals > 0 && x.second.filteredGoals > 0)).join('').replace(/0/g, '.').split('.').map(x => x.length)
                   } else if (options.sub == 'onenot') {
-                      hitgateReps = games.map(x => +(x.first.goals == 0 || x.second.goals == 0)).join('').replace(/0/g, '.').split('.').map(x => x.length)
+                      hitgateReps = games.map(x => +(x.first.filteredGoals == 0 || x.second.filteredGoals == 0)).join('').replace(/0/g, '.').split('.').map(x => x.length)
                   } else { // onezero
-                      hitgateReps = games.map(x => +!!(x.first.goals > 0 ^ x.second.goals > 0)).join('').replace(/0/g, '.').split('.').map(x => x.length)
+                      hitgateReps = games.map(x => +!!(x.first.filteredGoals > 0 ^ x.second.filteredGoals > 0)).join('').replace(/0/g, '.').split('.').map(x => x.length)
                   }
               }
 
@@ -453,10 +453,14 @@
               console.log('filter after', teamName, opponentTeamName, matches.matchesInfo.length)
 
               matches.matchesInfo = matches.matchesInfo.map(x => {
-                  const chooseGoals = (t) => options.time == 2 ? (t.goalsSecondTime || t.goals) - t.goalsFirstTime : options.time == 1 ? t.goalsFirstTime : t.goals
+                //   const chooseGoals = (t) => options.time == 2 ? t.goalsSecondTime ?? t.goals - t.goalsFirstTime : options.time == 1 ? t.goalsFirstTime : t.goals
+                  const chooseGoals = (t) => options.time === 0 ? t.goals : t.goalsFirstTime >= 0 ? (options.time == 2 ? t.goalsSecondTime ?? t.goals - t.goalsFirstTime : t.goalsFirstTime) : undefined
                 //   if (x.first.filteredGoals === undefined && x.second.filteredGoals === undefined) {
                       x.first.filteredGoals = chooseGoals(x.first)
                       x.second.filteredGoals = chooseGoals(x.second)
+                      x.filteredResult = (x.first.filteredGoals ?? x.second.filteredGoals) >= 0
+                        ? x.first.filteredGoals === x.second.filteredGoals ? 'Н' : x.first.filteredGoals > x.second.filteredGoals ? 'В' : 'П'
+                        : undefined
                 //   }
                   return x
               })
@@ -498,18 +502,18 @@
                       console.log('Found a match with series')
 
                     //   console.log('found something', match.first.name.trim() || match.first.matches[0].name, match.second.name.trim() || match.second.matches[0].name)
-                      const frequentName = partial => {
-                          const dict = {}
-                          partial.forEach(item => {
-                              dict[item.first.name] = (dict[item.first.name] || 0) + 1
-                              dict[item.second.name] = (dict[item.second.name] || 0) + 1
-                          })
-                          return Object.keys(dict)[Object.values(dict).findIndex(x => x === Math.max(...Object.values(dict)))]
-                      }
+                    //   const frequentName = partial => {
+                    //       const dict = {}
+                    //       partial.forEach(item => {
+                    //           dict[item.first.name] = (dict[item.first.name] || 0) + 1
+                    //           dict[item.second.name] = (dict[item.second.name] || 0) + 1
+                    //       })
+                    //       return Object.keys(dict)[Object.values(dict).findIndex(x => x === Math.max(...Object.values(dict)))]
+                    //   }
 
                       const lastSeriesGame = {
-                          first: { name: match.first.name.trim() || frequentName(match.first.matches) },
-                          second: { name: match.second.name.trim() || frequentName(match.second.matches) },
+                          first: { name: match.first.name },
+                          second: { name: match.second.name },
                           series: [analizedFirst, analizedSecond].map(x => x.reps.slice(-1)[0]),
                           matchUrl: match.link,
                           league: match.league
@@ -688,6 +692,21 @@
 
             this.matches = snap
 
+            const frequentName = partial => {
+                const dict = {}
+                partial.forEach(item => {
+                    dict[item.first.name] = (dict[item.first.name] || 0) + 1
+                    dict[item.second.name] = (dict[item.second.name] || 0) + 1
+                })
+                return Object.keys(dict)[Object.values(dict).findIndex(x => x === Math.max(...Object.values(dict)))]
+            }
+
+            this.matches = this.matches.map(x => {
+                x.first.name = x.first.name.trim() || frequentName(x.first.matches)
+                x.second.name = x.second.name.trim() || frequentName(x.second.matches)
+                return x
+            })
+
             // if (!snap.empty) localStorage.setItem('matches', JSON.stringify(this.matches) || '[]')
 
             localStorage.setItem('today', JSON.stringify(today) || '0')
@@ -696,7 +715,7 @@
         console.log(this.matches)
         // console.log((await db.collection('matchesToParse').where('forDate', '==', today).get()).docs[0])
         try {
-            this.leagues = [...new Set([...(await db.collection('matchesToParse').where('forDate', '==', today).get()).docs[0].data().leagues])]
+            this.leagues = [...new Set([...(await db.collection('matchesToParse').where('forDate', '>=', today).orderBy("forDate", "asc").get()).docs[0].data().leagues])]
         } catch {}
         this.loading.leagues = false
 
